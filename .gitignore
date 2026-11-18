@@ -1,0 +1,15 @@
+build/
+dist/
+tools/
+**/build/
+**/.gradle/
+**/.kotlin/
+**/target/
+**/node_modules/
+**/local.properties
+*.jks
+*.keystore
+*.apk
+*.apk.idsig
+__pycache__/
+

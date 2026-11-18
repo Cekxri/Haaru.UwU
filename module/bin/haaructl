@@ -1,0 +1,13 @@
+#!/system/bin/sh
+umask 077
+MODDIR=${0%/*}/..
+if [ "$(id -u)" != 0 ]; then
+    printf '%s\n' '{"ok":false,"verified":false,"error":"Root UID 0 required"}'
+    exit 2
+fi
+export CLASSPATH="$MODDIR/bin/haaru.dex"
+if [ -x /system/bin/timeout ]; then
+    exec /system/bin/timeout 45 /system/bin/app_process /system/bin com.github.haaru.ksu.Haaru --module "$MODDIR" "$@"
+fi
+exec /system/bin/app_process /system/bin com.github.haaru.ksu.Haaru --module "$MODDIR" "$@"
+

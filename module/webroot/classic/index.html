@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; connect-src 'none'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Haaru · 系統全域 SIM 地區設定</title>
+  <link rel="stylesheet" href="../style.css">
+  <script src="../presets.js" defer></script>
+  <script src="../app.js" defer></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">KernelSU 模組</p>
+        <h1><span id="module-version">Haaru · 版本待確認</span><span>系統全域 SIM 地區設定</span></h1>
+      </div>
+      <button id="read-status" class="button secondary" type="button">重新讀取</button>
+    </header>
+
+    <section class="overview" aria-labelledby="overview-title">
+      <div class="overview-heading">
+        <h2 id="overview-title">目前狀態</h2>
+        <span id="state-label" class="badge neutral">尚未讀取</span>
+      </div>
+      <p id="state-description">保存 SIM 設定後，等待系統全域引擎回報套用確認。</p>
+      <p class="scope-note">系統全域引擎提供暫時的 SIM 地區與顯示名稱讀值；SIM／eSIM、訂閱資料庫與持久電信設定保持原值。IP、GPS 與帳號地區不會隨之改變。未取得目前設定的引擎確認時，不會顯示已套用。</p>
+      <div class="global-actions">
+        <button id="enable" class="button primary" type="button" disabled>啟用已存設定</button>
+        <button id="reapply" class="button secondary" type="button" disabled>重新載入設定</button>
+        <button id="disable" class="button restore" type="button" disabled>一鍵還原全部 SIM</button>
+        <button id="clear" class="button secondary" type="button" disabled>清除已存設定</button>
+      </div>
+      <p class="small">「一鍵還原全部 SIM」撤下全部國家／ISP 覆寫並保留已存設定，需等待全域引擎確認；「清除已存設定」移除模組內的全域設定。拔卡或換卡後，可清除舊設定再重新選擇。</p>
+      <p class="small">停用或清除後，引擎會還原暫時讀值。從管理器停用或移除模組後，請重新開機，還原記憶體中的全域設定；SIM／eSIM 資料保持原值。</p>
+    </section>
+
+    <div id="message" class="message" role="status" aria-live="polite" hidden></div>
+    <div id="warnings" class="warnings" role="status" aria-live="polite" hidden></div>
+
+    <section class="sim-section" aria-labelledby="sim-title">
+      <div class="section-heading">
+        <h2 id="sim-title">SIM 全域設定</h2>
+        <p id="sim-count" class="small">正在讀取系統資訊…</p>
+      </div>
+      <p id="empty-state" class="empty-state">請從 KernelSU 管理器開啟模組 WebUI。</p>
+      <div id="sim-cards" class="sim-grid"></div>
+    </section>
+
+    <footer class="footer">
+      <p>保存後，等待系統全域引擎確認。更換 SIM 或切換 eSIM 後，重新讀取並核對設定；下方卡片顯示 SIM 原始資料。</p>
+      <p>本頁僅顯示地區與顯示名稱，不顯示電話號碼、ICCID 或 IMSI。</p>
+    </footer>
+    <noscript><p class="message error">請啟用 JavaScript，才能讀取與修改設定。</p></noscript>
+  </main>
+</body>
+</html>

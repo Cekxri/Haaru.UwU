@@ -1,0 +1,331 @@
+{
+  "source": "https://github.com/a5533348/Nrfr/tree/6c05f224dc802d0df952db93a6d2852a91c9edb0",
+  "countries": [
+    "CN",
+    "HK",
+    "MO",
+    "TW",
+    "JP",
+    "KR",
+    "US",
+    "GB",
+    "DE",
+    "FR",
+    "IT",
+    "ES",
+    "PT",
+    "RU",
+    "IN",
+    "AU",
+    "NZ",
+    "SG",
+    "MY",
+    "TH",
+    "VN",
+    "ID",
+    "PH",
+    "CA",
+    "MX",
+    "BR",
+    "AR",
+    "ZA"
+  ],
+  "carriers": [
+    [
+      "China Mobile",
+      "CN"
+    ],
+    [
+      "China Unicom",
+      "CN"
+    ],
+    [
+      "China Telecom",
+      "CN"
+    ],
+    [
+      "CMHK",
+      "HK"
+    ],
+    [
+      "HKT",
+      "HK"
+    ],
+    [
+      "3HK",
+      "HK"
+    ],
+    [
+      "SmarTone",
+      "HK"
+    ],
+    [
+      "CTM",
+      "MO"
+    ],
+    [
+      "3 Macau",
+      "MO"
+    ],
+    [
+      "Chunghwa Telecom",
+      "TW"
+    ],
+    [
+      "Taiwan Mobile",
+      "TW"
+    ],
+    [
+      "FarEasTone",
+      "TW"
+    ],
+    [
+      "NTT docomo",
+      "JP"
+    ],
+    [
+      "au by KDDI",
+      "JP"
+    ],
+    [
+      "Softbank",
+      "JP"
+    ],
+    [
+      "Rakuten Mobile",
+      "JP"
+    ],
+    [
+      "SK Telecom",
+      "KR"
+    ],
+    [
+      "KT Corporation",
+      "KR"
+    ],
+    [
+      "LG U+",
+      "KR"
+    ],
+    [
+      "AT&T",
+      "US"
+    ],
+    [
+      "T-Mobile USA",
+      "US"
+    ],
+    [
+      "Verizon",
+      "US"
+    ],
+    [
+      "Sprint",
+      "US"
+    ],
+    [
+      "EE",
+      "GB"
+    ],
+    [
+      "O2 UK",
+      "GB"
+    ],
+    [
+      "Three UK",
+      "GB"
+    ],
+    [
+      "Vodafone UK",
+      "GB"
+    ],
+    [
+      "Singtel",
+      "SG"
+    ],
+    [
+      "StarHub",
+      "SG"
+    ],
+    [
+      "M1",
+      "SG"
+    ],
+    [
+      "Maxis",
+      "MY"
+    ],
+    [
+      "Celcom",
+      "MY"
+    ],
+    [
+      "Digi",
+      "MY"
+    ],
+    [
+      "U Mobile",
+      "MY"
+    ],
+    [
+      "AIS",
+      "TH"
+    ],
+    [
+      "DTAC",
+      "TH"
+    ],
+    [
+      "True Move H",
+      "TH"
+    ],
+    [
+      "Viettel Mobile",
+      "VN"
+    ],
+    [
+      "Vinaphone",
+      "VN"
+    ],
+    [
+      "Mobifone",
+      "VN"
+    ],
+    [
+      "Telkomsel",
+      "ID"
+    ],
+    [
+      "Indosat Ooredoo",
+      "ID"
+    ],
+    [
+      "XL Axiata",
+      "ID"
+    ],
+    [
+      "Globe Telecom",
+      "PH"
+    ],
+    [
+      "Smart Communications",
+      "PH"
+    ],
+    [
+      "DITO Telecommunity",
+      "PH"
+    ],
+    [
+      "Reliance Jio",
+      "IN"
+    ],
+    [
+      "Bharti Airtel",
+      "IN"
+    ],
+    [
+      "Vodafone Idea",
+      "IN"
+    ],
+    [
+      "Telstra",
+      "AU"
+    ],
+    [
+      "Optus",
+      "AU"
+    ],
+    [
+      "Vodafone AU",
+      "AU"
+    ],
+    [
+      "Bell Mobility",
+      "CA"
+    ],
+    [
+      "Rogers Wireless",
+      "CA"
+    ],
+    [
+      "Telus Mobility",
+      "CA"
+    ],
+    [
+      "T-Mobile DE",
+      "DE"
+    ],
+    [
+      "Vodafone DE",
+      "DE"
+    ],
+    [
+      "O2 DE",
+      "DE"
+    ],
+    [
+      "Orange FR",
+      "FR"
+    ],
+    [
+      "SFR",
+      "FR"
+    ],
+    [
+      "Free Mobile",
+      "FR"
+    ],
+    [
+      "Bouygues Telecom",
+      "FR"
+    ],
+    [
+      "Telecom Italia",
+      "IT"
+    ],
+    [
+      "Vodafone IT",
+      "IT"
+    ],
+    [
+      "Wind Tre",
+      "IT"
+    ],
+    [
+      "Movistar",
+      "ES"
+    ],
+    [
+      "Vodafone ES",
+      "ES"
+    ],
+    [
+      "Orange ES",
+      "ES"
+    ],
+    [
+      "MTS",
+      "RU"
+    ],
+    [
+      "MegaFon",
+      "RU"
+    ],
+    [
+      "Beeline",
+      "RU"
+    ],
+    [
+      "Vivo",
+      "BR"
+    ],
+    [
+      "Claro",
+      "BR"
+    ],
+    [
+      "TIM Brasil",
+      "BR"
+    ]
+  ]
+}

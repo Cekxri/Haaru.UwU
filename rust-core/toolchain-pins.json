@@ -1,0 +1,50 @@
+{
+  "rustVersion": "1.100.0",
+  "releaseDate": "2026-11-12",
+  "manifestUrl": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+  "manifestSha256": "3051e859570f64a8c5acb9d09e87425db52c7d97287c67e8f6d57d7d34ef9258",
+  "components": [
+    {
+      "package": "rustc",
+      "target": "x86_64-pc-windows-msvc",
+      "url": "https://static.rust-lang.org/dist/2026-11-12/rustc-1.100.0-x86_64-pc-windows-msvc.tar.xz",
+      "sha256": "4f1f70145ab94e1036b6a9fb0a1fa1393352999701699aedab4dd2724047149e"
+    },
+    {
+      "package": "cargo",
+      "target": "x86_64-pc-windows-msvc",
+      "url": "https://static.rust-lang.org/dist/2026-11-12/cargo-1.100.0-x86_64-pc-windows-msvc.tar.xz",
+      "sha256": "efb63c35df751dbd58b7aa73d6a43d75b00bd356bfdb925901e85379d0de108a"
+    },
+    {
+      "package": "rust-std",
+      "target": "x86_64-pc-windows-msvc",
+      "url": "https://static.rust-lang.org/dist/2026-11-12/rust-std-1.100.0-x86_64-pc-windows-msvc.tar.xz",
+      "sha256": "24ad2f28791e08a573b9c7df5efa3ace884eecd1fa7e7f5b62c65f4b49bb4532"
+    },
+    {
+      "package": "rust-std",
+      "target": "aarch64-linux-android",
+      "url": "https://static.rust-lang.org/dist/2026-11-12/rust-std-1.100.0-aarch64-linux-android.tar.xz",
+      "sha256": "5e7503cc0cb87b710457d13ec97b2e7729a1210a2fdce9ad99bd0c86e0f69186"
+    },
+    {
+      "package": "rust-std",
+      "target": "armv7-linux-androideabi",
+      "url": "https://static.rust-lang.org/dist/2026-11-12/rust-std-1.100.0-armv7-linux-androideabi.tar.xz",
+      "sha256": "927541ad641a3714fc54f04f93bd1e9b7db52b851458f33e572736d6dc71cc95"
+    },
+    {
+      "package": "rust-std",
+      "target": "x86_64-linux-android",
+      "url": "https://static.rust-lang.org/dist/2026-11-12/rust-std-1.100.0-x86_64-linux-android.tar.xz",
+      "sha256": "75c5b031ac03b3a4f78170ef76be544f1a4a281b8151c83d1d6ca6dbf41543e5"
+    },
+    {
+      "package": "rust-std",
+      "target": "i686-linux-android",
+      "url": "https://static.rust-lang.org/dist/2026-11-12/rust-std-1.100.0-i686-linux-android.tar.xz",
+      "sha256": "628b1cc2a8d3c8f2e588d7445bfc655bc66b3a7f237590db55a5ac41470f2125"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+[
+  {
+    "name": "lsplant",
+    "repo": "LSPosed/LSPlant",
+    "commit": "d8b5d1dbb664abc606644036822e4bb64547edf6",
+    "sha256": "209bd43f14ee4c92d39a56e512151127fa391f5549ef61107e82f379a9070ccb",
+    "bytes": 232432
+  },
+  {
+    "name": "dex_builder",
+    "repo": "LSPosed/DexBuilder",
+    "commit": "ac7fb2230954ee311808bad469b0db501f31bfb8",
+    "sha256": "2284e3e13fffe5513bdacfc586f3275020e62f6ddaa50ba01903cf91c080a67b",
+    "bytes": 97293
+  },
+  {
+    "name": "parallel_hashmap",
+    "repo": "greg7mdp/parallel-hashmap",
+    "commit": "0cd57d29a959256ed66b2afdd1009928fc625d09",
+    "sha256": "6a7f206352db4ed578a808c4facea02b71c4f76f40d3c8c8c2f5515509668b77",
+    "bytes": 2157478
+  },
+  {
+    "name": "zygisk",
+    "repo": "topjohnwu/zygisk-module-sample",
+    "commit": "7bb941ac8edfcffd1d23761e401c45ca95409dc1",
+    "sha256": "3090af580d0e1b6b32b22e75a1c7e30950991635c1aa939abb4ee35a6e319036",
+    "bytes": 65173
+  },
+  {
+    "name": "json",
+    "repo": "nlohmann/json",
+    "commit": "9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03",
+    "sha256": "42013e884a8a38d2a974619844a294de614dab4bc14e0ad23711ef4dacbb24c1",
+    "bytes": 8570442
+  },
+  {
+    "coordinate": "io.github.vvb2060.ndk:dobby:1.2",
+    "url": "https://repo.maven.apache.org/maven2/io/github/vvb2060/ndk/dobby/1.2/dobby-1.2.aar",
+    "sha256": "251f48ae21686d7f69276c50644ca345f450e45110057437f7d76bb14cddf3a1",
+    "bytes": 290475,
+    "source": "https://github.com/vvb2060/dobby-android",
+    "reason": "Dependency used by pinned official LSPlant tests; upstream HEAD Android build is inconsistent",
+    "name": "dobby-prefab"
+  }
+]
