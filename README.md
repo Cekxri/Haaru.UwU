@@ -8,7 +8,7 @@
 
 ^ ܸ⩌⩊⩌ ܸ^
 
-[繁體中文](#中文) · [English (UK)](#english) · [下載 / Download](https://github.com/Cekxri/Haaru.UwU/releases)
+[繁體中文](#中文) · [English](#english) · [下載 / Download](https://github.com/Cekxri/Haaru.UwU/releases)
 
 </div>
 

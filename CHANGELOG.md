@@ -4,13 +4,13 @@
 
 - 介面只保留原生 App，模組執行按鈕開啟 App 或重試安裝同版本 APK。
 - 改進自動安裝與開機續裝流程，安裝結果依實際版本、簽章及 APK 內容驗證。
-- 修復 0.7.0 安裝器的 Java lambda 相容性崩潰；刷入與開機安裝日誌改為繁中／英式英文雙語，失敗不再被誤判為等待開機。
-- 自行撰寫的英文介面、訊息與文件統一使用 English (UK)。
+- 修復 0.7.0 安裝器的 Java lambda 相容性崩潰；刷入與開機安裝日誌改為繁中／英文雙語，失敗不再被誤判為等待開機。
+- 全面整理英文介面、訊息與文件的用字。
 - 預設使用 Google Monet 桌布色彩；關閉後提供 15 個配色與色彩選擇器，手動預設偏向紫羅蘭。
 - The native App is the sole interface; the module action opens it or retries installation of the matching APK.
 - Automatic installation and boot-time retries verify the installed version, signature and APK contents.
 - Fixed the Java lambda compatibility crash in the 0.7.0 installer. Flashing and boot-time installation messages are bilingual, and failures are no longer mistaken for a pending boot.
-- Authored English text now uses UK English.
+- Revised English wording throughout the interface, messages and documentation.
 - Google Monet wallpaper colours are on by default; manual mode offers 15 palettes and an interactive colour picker, with violet as the fresh fallback.
 
 ## 0.7.0 — 2026-11-18
