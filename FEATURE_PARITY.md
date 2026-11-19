@@ -1,4 +1,4 @@
-# Haaru 功能與驗收（0.7.1）
+# Haaru 功能與驗收（0.7.2）
 
 原預設來源固定於 [預設資料來源](https://github.com/a5533348/Nrfr/commit/6c05f224dc802d0df952db93a6d2852a91c9edb0)，保留完整 28 國與 74 電信商 code／displayName。介面改為獨立 Compose Android App，模組仍採中央 phone Binder clone＋兩個非持久 property＋同 boot 原值 shadow。
 

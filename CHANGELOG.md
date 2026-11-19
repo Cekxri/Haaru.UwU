@@ -1,5 +1,12 @@
 # 更新紀錄 / Changes
 
+## 0.7.2 — 2026-11-19 ☕
+
+- 修正 APK 標準輸入安裝命令的參數相容性，避免輸入標記被視為未知選項。
+- 加入該命令格式的回歸檢查；本版仍待實機驗收。
+- Fixed APK installation arguments so Android reads standard input without rejecting its marker as an unknown option.
+- Added regression checks for this command format; device validation is still pending.
+
 ## 0.7.1 — 2026-11-19
 
 - 介面只保留原生 App，模組執行按鈕開啟 App 或重試安裝同版本 APK。

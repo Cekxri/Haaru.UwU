@@ -269,7 +269,7 @@ public final class CompanionInstallation {
             return new Info(packageName, version == null ? "" : version, code, certificate, protocol, apkHash);
         }
         @Override public void install(Path apk, long bytes) throws Exception {
-            final java.lang.Process process = starter.start(new String[] {"/system/bin/pm", "install", "-r", "--user", "0", "-S", Long.toString(bytes), "-"});
+            final java.lang.Process process = starter.start(new String[] {"/system/bin/pm", "install", "-r", "--user", "0", "-S", Long.toString(bytes)});
             ExecutorService io = Executors.newFixedThreadPool(3);
             try {
                 Future<String> output = io.submit(new Callable<String>() {

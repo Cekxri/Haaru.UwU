@@ -1,6 +1,6 @@
-# Haaru 原生 Android 介面（0.7.1）
+# Haaru 原生 Android 介面（0.7.2）
 
-主介面在 `companion/`，以 Kotlin／Compose Android 編譯成 `dist/Haaru-0.7.1.apk`。使用真正的 Miuix、AndroidX Material 3 與 Backdrop及 Android 系統字型。介面只提供原生 App，模組執行按鈕負責開啟 App 或重試安裝同版本 APK。
+主介面在 `companion/`，以 Kotlin／Compose Android 編譯成 `dist/Haaru-0.7.2.apk`。使用真正的 Miuix、AndroidX Material 3 與 Backdrop及 Android 系統字型。介面只提供原生 App，模組執行按鈕負責開啟 App 或重試安裝同版本 APK。
 
 ## 建置
 

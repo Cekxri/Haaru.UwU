@@ -28,7 +28,13 @@ public final class CompanionAndroidPlatformTest {
         final StubProcess process = new StubProcess(bytes, "Success\n", "", 0, info);
         final List<String> command = new ArrayList<String>();
         CompanionInstallation.ProcessStarter starter = new CompanionInstallation.ProcessStarter() {
-            @Override public java.lang.Process start(String[] args) { command.addAll(Arrays.asList(args)); return process; }
+            @Override public java.lang.Process start(String[] args) {
+                command.addAll(Arrays.asList(args));
+                PmInstallOptionFixture parsed = PmInstallOptionFixture.parse(args);
+                if (parsed.exitCode != 0)
+                    return new StubProcess(bytes, "", "Synthetic parser rejection: " + parsed.error + "\n", parsed.exitCode, null, true);
+                return process;
+            }
         };
         expectPending(starter);
         ServiceManager.register("package", new IBinder() {});
@@ -40,9 +46,40 @@ public final class CompanionAndroidPlatformTest {
         CompanionInstallation.Plan plan = new CompanionInstallation.Plan(apk, CompanionProtocol.PACKAGE, "0.7.1", 12, cert, 1, CompanionInstallation.hash(apk), bytes.length);
         Map<String, Object> result = CompanionInstallation.run(plan, platform);
         check("installed".equals(result.get("state")) && Boolean.TRUE.equals(result.get("verified")), "production install method and reflection readback complete successfully");
-        check(command.equals(Arrays.asList("/system/bin/pm", "install", "-r", "--user", "0", "-S", Integer.toString(bytes.length), "-")), "real method passes fixed pm stdin argv, no downgrade or arbitrary shell");
+        check(command.equals(Arrays.asList("/system/bin/pm", "install", "-r", "--user", "0", "-S", Integer.toString(bytes.length))), "real method passes fixed sized stdin argv without a lone dash or downgrade flag");
+        PmInstallOptionFixture parsed = PmInstallOptionFixture.parse(command.toArray(new String[0]));
+        check(parsed.exitCode == 0 && parsed.stdin && parsed.size == bytes.length && parsed.user == 0,
+                "actual production argv passes Android BasicShell makeInstallParams and selects sized stdin");
+        List<String> previousCommand = new ArrayList<String>(command); previousCommand.add("-");
+        PmInstallOptionFixture previous = PmInstallOptionFixture.parse(previousCommand.toArray(new String[0]));
+        check(previous.exitCode == 255 && "Unknown option -".equals(previous.error),
+                "the released lone-dash argv reproduces the framework option-parser rejection");
+        List<String> terminatedCommand = new ArrayList<String>(command); terminatedCommand.add("--"); terminatedCommand.add("-");
+        PmInstallOptionFixture terminated = PmInstallOptionFixture.parse(terminatedCommand.toArray(new String[0]));
+        check(terminated.exitCode == 0 && terminated.stdin && terminated.size == bytes.length,
+                "a dash after the actual framework option terminator is a path, not an option");
         check(Arrays.equals(bytes, process.input.toByteArray()), "actual asynchronous task streams all APK bytes before waiting");
         check(PackageManager.installedFlags == 0x08000080 && process.destroyed, "post-install signer/metadata readback and process cleanup execute");
+        PackageManager.installed = null;
+        final StubProcess[] parserRejected = new StubProcess[1];
+        platform = new CompanionInstallation.AndroidPlatform(new CompanionInstallation.ProcessStarter() {
+            @Override public java.lang.Process start(String[] args) {
+                List<String> oldArgs = new ArrayList<String>(Arrays.asList(args)); oldArgs.add("-");
+                PmInstallOptionFixture rejected = PmInstallOptionFixture.parse(oldArgs.toArray(new String[0]));
+                parserRejected[0] = new StubProcess(bytes, "", "Synthetic parser rejection: " + rejected.error + "\n", rejected.exitCode, null, true);
+                return parserRejected[0];
+            }
+        });
+        result = CompanionInstallation.run(plan, platform);
+        check("error".equals(result.get("state")) && "package-install".equals(result.get("stage"))
+                && result.get("message").toString().contains("exit=255"),
+                "old argv parser failure reaches production package-install diagnostics even after an early Broken pipe");
+        Path log = module.resolve("data/companion-install-debug.log");
+        String diagnostic = new String(Files.readAllBytes(log), StandardCharsets.UTF_8);
+        check(diagnostic.contains("Synthetic parser rejection: Unknown option -") && Files.size(log) <= 32768
+                && PackageManager.installed == null && parserRejected[0].destroyed,
+                "parser stderr remains bounded and private, with no installed success or leaked process");
+        platform = new CompanionInstallation.AndroidPlatform(starter);
         PackageManager.installed = null; info.applicationInfo.metaData.putString(CompanionInstallation.PROTOCOL_KEY, "1");
         result = CompanionInstallation.run(plan, platform);
         check("error".equals(result.get("state")) && "archive-parse".equals(result.get("stage")), "wrong-typed metadata cannot be silently treated as compatible");
@@ -54,8 +91,7 @@ public final class CompanionAndroidPlatformTest {
         result = CompanionInstallation.run(plan, platform);
         check("error".equals(result.get("state")) && "package-install".equals(result.get("stage")), "production PM failure retains stage and does not become boot pending");
         check(result.get("message").toString().contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE"), "safe public reason is preserved from stderr");
-        Path log = module.resolve("data/companion-install-debug.log");
-        String diagnostic = new String(Files.readAllBytes(log), StandardCharsets.UTF_8);
+        diagnostic = new String(Files.readAllBytes(log), StandardCharsets.UTF_8);
         check(diagnostic.contains("synthetic detail") && Files.size(log) <= 32768, "actual stderr survives in bounded module-private diagnostics");
         final StubProcess rejectedInput = new StubProcess(bytes, "", "Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE: synthetic early rejection]\n", 1, null, true);
         platform = new CompanionInstallation.AndroidPlatform(new CompanionInstallation.ProcessStarter() {

@@ -1,12 +1,12 @@
-# Haaru 0.7.1 發佈
+# Haaru 0.7.2 發佈
 
 ## 安裝檔案
 
 | 檔案 | 用途 |
 | --- | --- |
-| `Haaru-0.7.1.zip` | 在 KernelSU 刷入模組，包含同版 APK，完成後完整重啟 |
-| `Haaru-0.7.1.apk` | 原生介面 APK，可覆蓋更新或另外安裝 |
-| `Haaru-0.7.1-source.zip` | 模組與 App 原始碼，不含私人簽章 |
+| `Haaru-0.7.2.zip` | 在 KernelSU 刷入模組，包含同版 APK，完成後完整重啟 |
+| `Haaru-0.7.2.apk` | 原生介面 APK，可覆蓋更新或另外安裝 |
+| `Haaru-0.7.2-source.zip` | 模組與 App 原始碼，不含私人簽章 |
 | `SHA256SUMS.txt` | 三個檔案的 SHA256 |
 | `build-manifest.json`／`companion-build-manifest.json` | 來源、工具、版本、產物與簽章指紋 |
 | `release-verification.json` | 實際發佈包與 APK 驗證結果 |
