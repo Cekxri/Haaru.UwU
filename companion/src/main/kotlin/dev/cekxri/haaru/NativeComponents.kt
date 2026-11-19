@@ -71,7 +71,8 @@ internal fun HaaruButton(style: UiStyle, label: String, enabled: Boolean = true,
             interactionSource = interaction,
             colors = if (secondary) MiButtonDefaults.buttonColors() else MiButtonDefaults.buttonColorsPrimary()) {
             Text(label, fontWeight = FontWeight.SemiBold,
-                color = if (secondary) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onPrimary)
+                color = if (!enabled) MiuixTheme.colorScheme.disabledOnPrimaryButton
+                    else if (secondary) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onPrimary)
         }
         UiStyle.MATERIAL3 -> if (secondary) FilledTonalButton(onClick, feedback.heightIn(min = 48.dp), enabled = enabled, interactionSource = interaction) { Text(label) }
             else Button(onClick, feedback.heightIn(min = 48.dp), enabled = enabled, interactionSource = interaction) { Text(label) }
@@ -99,7 +100,7 @@ internal fun SettingSwitch(style: UiStyle, title: String, subtitle: String, chec
                 style = MaterialTheme.typography.bodySmall)
         }
         // Restart just the switch at its target when reduced motion is requested.
-        // Library-provided thumb springs otherwise keep their normal native behavior.
+        // Library-provided thumb springs otherwise keep their normal native behaviour.
         key(if (LocalHaaruReducedMotion.current) checked else Unit) { when (style) {
             UiStyle.MIUIX -> MiSwitch(checked = checked, onCheckedChange = onChange, enabled = enabled,
                 modifier = Modifier.semantics { contentDescription = title })

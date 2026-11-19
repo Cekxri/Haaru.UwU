@@ -226,8 +226,10 @@ fn validate_appearance(bytes: &[u8]) -> Result<(), String> {
         let valid = match key.as_str() {
             "style" => matches!(value.as_str(), Some("MIUIX" | "MATERIAL3")),
             "appearance" => matches!(value.as_str(), Some("SYSTEM" | "LIGHT" | "DARK")),
-            "palette" => matches!(value.as_str(), Some("MINT" | "BLUE" | "VIOLET" | "ROSE")),
-            "glass" | "reduceMotion" => value.is_boolean(), _ => false,
+            "palette" => matches!(value.as_str(), Some("VIOLET" | "LAVENDER" | "WISTERIA" | "IRIS" | "PLUM" | "LILAC" | "ORCHID" | "MAUVE" | "PERIWINKLE" | "MINT" | "BLUE" | "ROSE" | "SAGE" | "CAFE" | "SLATE")),
+            "glass" | "reduceMotion" | "dynamicColour" => value.is_boolean(),
+            "customColour" => value.as_str().is_some_and(|text| text.is_empty() || (text.len() == 7 && text.starts_with('#') && text.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit))),
+            _ => false,
         };
         if !valid { return Err(format!("Unknown or invalid appearance field: {key}")); }
     }
@@ -236,7 +238,7 @@ fn validate_appearance(bytes: &[u8]) -> Result<(), String> {
 
 fn sync_parent(path: &Path) -> Result<(), String> {
     #[cfg(unix)]
-    if let Some(parent) = path.parent() { if exists(parent)? { File::open(parent).and_then(|file| file.sync_all()).map_err(|failure| error("Cannot synchronize staged settings directory", failure))?; } }
+    if let Some(parent) = path.parent() { if exists(parent)? { File::open(parent).and_then(|file| file.sync_all()).map_err(|failure| error("Cannot synchronise staged settings directory", failure))?; } }
     #[cfg(not(unix))]
     let _ = path;
     Ok(())
@@ -286,13 +288,18 @@ pub fn migrate_with_observer(source: &Path, destination: &Path, observer: &mut d
     } else { None };
     refuse_removal(&source)?;
     let state = optional(&source.join("data/state.properties"), 65536)?.map(|bytes| validated_state(&bytes)).transpose()?;
-    let appearance = optional(&source.join("webroot/appearance.json"), 2048)?;
+    let current_appearance = optional(&source.join("data/appearance.json"), 2048)?;
+    let legacy_appearance = optional(&source.join("webroot/appearance.json"), 2048)?;
+    if current_appearance.is_some() && legacy_appearance.is_some() && current_appearance != legacy_appearance {
+        return Err("Conflicting appearance files; settings were not changed".into());
+    }
+    let appearance = current_appearance.or(legacy_appearance);
     if let Some(bytes) = &appearance { validate_appearance(bytes)?; }
     let disabled_path = source.join("disable"); checked(&disabled_path)?; let disabled = exists(&disabled_path)?;
     if disabled && !fs::metadata(&disabled_path).map_err(|failure| error("Cannot inspect installed disable marker", failure))?.is_file() { return Err("Invalid installed disable marker".into()); }
     let changes = [
         (destination.join("data/state.properties"), state.clone()),
-        (destination.join("webroot/appearance.json"), appearance.clone()),
+        (destination.join("data/appearance.json"), appearance.clone()),
         (destination.join("disable"), if disabled { Some(Vec::new()) } else { None }),
     ];
     let mut backups = Vec::new();

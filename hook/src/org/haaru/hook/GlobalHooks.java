@@ -199,7 +199,7 @@ public final class GlobalHooks {
     static synchronized int initializeWithLoader(ClassLoader loader) throws Throwable {
         if (installed) {
             if (installedLoader == loader && isCoverageComplete()) return installedCount;
-            throw new IllegalStateException("Central service initialization is incomplete" +
+            throw new IllegalStateException("Central service initialisation is incomplete" +
                     (diagnosticError.isEmpty() ? "" : ": " + diagnosticError));
         }
         installed = true;

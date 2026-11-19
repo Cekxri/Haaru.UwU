@@ -30,7 +30,7 @@ def run_json(command, *, stdin=None, timeout=30):
 
 
 def raw_array_items(text):
-    """Retain each Java JSON item's original bytes instead of reserializing it."""
+    """Retain each Java JSON item's original bytes instead of reserialising it."""
     decoder = json.JSONDecoder()
     position = text.index("[") + 1
     items = []
@@ -54,7 +54,7 @@ def raw_array_items(text):
 
 def node_hashes(inputs):
     # An independent runtime hashes Buffer bytes. Known FNV-1a vectors below
-    # also check this oracle before using it for Java's exact serialized JSON.
+    # also check this oracle before using it for Java's exact serialised JSON.
     code = """const fs=require('node:fs');
 const inputs=JSON.parse(fs.readFileSync(0,'utf8'));
 const hashes=inputs.map(input=>{let hash=0xcbf29ce484222325n;
@@ -216,7 +216,7 @@ def probe_contract(args):
     for value, expected in zip(("", "a", "hello", active_raw, "台灣,é😀"), hashes):
         result("FNV hashes exact UTF-8 bytes as the independent Node Buffer oracle", {"op": "fnv", "value": value}, expected)
     result("raw binary FNV input matches the independent byte oracle", {"op": "fnv", "bytes": [0, 255, 128, 1]}, hashes[-1])
-    result("Java runtime UTF-8 bytes match its unchanged serialized string", {
+    result("Java runtime UTF-8 bytes match its unchanged serialised string", {
         "op": "fnv", "bytes": list(active_raw.encode("utf-8")),
     }, hashes[3])
 

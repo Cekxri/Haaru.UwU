@@ -59,7 +59,7 @@ public final class GlobalHooksCompatibilityTest {
         LegacyInfo copy=(LegacyInfo)installer.invoke("getActiveSubscriptionInfo",service,10,"caller");
         check(copy!=original && copy.getCountryIso().equals("us") && copy.getCarrierName().toString().equals("Cafe"),"legacy public reader receives a private Parcelable copy");
         check(copy.getDisplayName().toString().equals("Cafe") && copy.getNameSource()==7 && copy.isEmbedded()
-                && copy.getIccId().equals("fixture-id") && copy.getMcc().equals("466") && copy.getMnc().equals("01"),"full serialization preserves unrelated metadata");
+                && copy.getIccId().equals("fixture-id") && copy.getMcc().equals("466") && copy.getMnc().equals("01"),"full serialisation preserves unrelated metadata");
         check(original.getCountryIso().equals("tw") && original.getCarrierName().toString().equals("Original")
                 && original.getDisplayName().toString().equals("User name"),"no setter or private field write touches the original SIM object");
         service.list=Arrays.asList(original,null);

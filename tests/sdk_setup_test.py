@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SDK reproduction checks without modifying the real SDK or accepting licenses."""
+"""SDK reproduction checks without modifying the real SDK or accepting licences."""
 import hashlib
 from pathlib import Path
 import stat

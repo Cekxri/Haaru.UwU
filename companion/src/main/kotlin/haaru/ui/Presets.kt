@@ -1,6 +1,6 @@
 /* Preset values adapted from Haaru, Apache-2.0.
  * Source: a5533348/Haaru@6c05f224dc802d0df952db93a6d2852a91c9edb0.
- * All 28 countries and all 74 carriers retained; visible Chinese labels localized.
+ * All 28 countries and all 74 carriers retained; visible Chinese labels localised.
  * Carrier displayName values are unchanged from upstream.
  */
 package haaru.ui

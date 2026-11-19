@@ -9,7 +9,7 @@ JOURNAL="$MODDIR/data/upgrade-handoff.properties"
 [ "$(haaru_property "$JOURNAL" targetVersion)" = "$(haaru_property "$MODDIR/module.prop" version)" ] &&
 [ "$(haaru_property "$JOURNAL" targetVersionCode)" = "$(haaru_property "$MODDIR/module.prop" versionCode)" ] || exit 2
 [ "$(haaru_file_hash "$MODDIR/data/state.properties")" = "$(haaru_property "$JOURNAL" targetStateSha256)" ] &&
-[ "$(haaru_file_hash "$MODDIR/webroot/appearance.json")" = "$(haaru_property "$JOURNAL" targetPrefsSha256)" ] || exit 2
+[ "$(haaru_file_hash "$MODDIR/data/appearance.json")" = "$(haaru_property "$JOURNAL" targetPrefsSha256)" ] || exit 2
 HAARU_SOURCE_ID=$(haaru_property "$JOURNAL" sourceId)
 case "$HAARU_SOURCE_ID" in *[!A-Za-z0-9_.-]*|''|haaru) exit 2 ;; esac
 HAARU_SOURCE="/data/adb/modules/$HAARU_SOURCE_ID"
@@ -21,7 +21,9 @@ if [ ! -e "$HAARU_SOURCE" ]; then rm -f "$JOURNAL"; exit 0; fi
 [ "$(haaru_property "$HAARU_SOURCE/module.prop" version)" = "$(haaru_property "$JOURNAL" sourceVersion)" ] &&
 [ "$(haaru_property "$HAARU_SOURCE/module.prop" versionCode)" = "$(haaru_property "$JOURNAL" sourceVersionCode)" ] &&
 [ -f "$HAARU_SOURCE/disable" ] && [ ! -L "$HAARU_SOURCE/remove" ] || exit 2
-[ "$(haaru_file_hash "$HAARU_SOURCE/data/state.properties")" = "$(haaru_property "$JOURNAL" sourceStateSha256)" ] &&
-[ "$(haaru_file_hash "$HAARU_SOURCE/webroot/appearance.json")" = "$(haaru_property "$JOURNAL" sourcePrefsSha256)" ] || exit 2
+[ "$(haaru_file_hash "$HAARU_SOURCE/data/state.properties")" = "$(haaru_property "$JOURNAL" sourceStateSha256)" ] || exit 2
+HAARU_SOURCE_PREFS_PATH=$(haaru_property "$JOURNAL" sourcePrefsPath)
+case "$HAARU_SOURCE_PREFS_PATH" in data/appearance.json|webroot/appearance.json) ;; *) exit 2 ;; esac
+[ "$(haaru_file_hash "$HAARU_SOURCE/$HAARU_SOURCE_PREFS_PATH")" = "$(haaru_property "$JOURNAL" sourcePrefsSha256)" ] || exit 2
 touch "$HAARU_SOURCE/remove" || exit 2
 rm -f "$JOURNAL"

@@ -61,7 +61,7 @@ def inside_sdk(path):
 def license_text(name):
     text = (ROOT / "sdk-setup" / (name + ".txt")).read_text(encoding="utf-8").strip()
     if hashlib.sha1(text.encode("utf-8")).hexdigest() != LICENSES[name]:
-        raise ValueError("Pinned SDK license text differs: " + name)
+        raise ValueError("Pinned SDK licence text differs: " + name)
     return text
 
 
@@ -198,7 +198,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--offline", action="store_true", help="Use existing pinned archive downloads")
     parser.add_argument("--verify-only", action="store_true", help="Read and verify installed SDK without mutation or download")
-    parser.add_argument("--accept-licenses", action="store_true", help="Accept the bundled official SDK and preview license texts")
+    parser.add_argument("--accept-licenses", action="store_true", help="Accept the bundled official SDK and preview licence texts")
     parser.add_argument("--repair", action="store_true", help="Replace a differing package; do not use during a build")
     args = parser.parse_args()
     if os.name != "nt":

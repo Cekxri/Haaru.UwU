@@ -65,7 +65,7 @@ def main():
     (APP/'local.properties').write_text('sdk.dir='+(gradle_root/'tools/android-sdk').as_posix().replace(':','\\:')+'\n',encoding='utf-8')
     before=sources()
     subprocess.run([str(args.java_home/'bin/java.exe'),'-cp','gradle/wrapper/gradle-wrapper.jar',
-        'org.gradle.wrapper.GradleWrapperMain','--no-daemon','-p','companion','testDebugUnitTest','assembleRelease'],cwd=gradle_root,env=env,check=True)
+        'org.gradle.wrapper.GradleWrapperMain','--no-daemon','-Pkotlin.incremental=false','-p','companion','testDebugUnitTest','assembleRelease'],cwd=gradle_root,env=env,check=True)
     suites=[ET.parse(p).getroot() for p in (APP/'build/test-results/testDebugUnitTest').glob('TEST-*.xml')]
     tested=sum(int(s.attrib['tests']) for s in suites)
     if tested<7 or any(int(s.attrib.get('failures',0))+int(s.attrib.get('errors',0)) for s in suites):

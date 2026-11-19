@@ -269,7 +269,7 @@ public final class AndroidBackend implements Backend {
             try {
                 String country = string(call(bySubscription, null, subId));
                 if (!country.isEmpty()) return country;
-                // app_process may have an uninitialized SubscriptionManager cache:
+                // app_process may have an uninitialised SubscriptionManager cache:
                 // its static phone ID is -1 while direct ISub still resolves the SIM.
             }
             catch (UnsupportedOperationException unavailable) { /* Try the other supported form. */ }
@@ -347,7 +347,7 @@ public final class AndroidBackend implements Backend {
             if (thread == null) {
                 prepareShellLooper();
                 Method systemMain = optional(activityThread, "systemMain");
-                if (systemMain == null) throw new UnsupportedOperationException("Android shell Context initializer is unavailable");
+                if (systemMain == null) throw new UnsupportedOperationException("Android shell Context initialiser is unavailable");
                 thread = call(systemMain, null);
             }
             if (thread != null) context = call(activityThread.getMethod("getSystemContext"), thread);
@@ -371,7 +371,7 @@ public final class AndroidBackend implements Backend {
         if (call(looper.getMethod("myLooper"), null) != null) return;
         Object main = call(looper.getMethod("getMainLooper"), null);
         Method prepare = optional(looper, main == null ? "prepareMainLooper" : "prepare");
-        if (prepare == null) throw new UnsupportedOperationException("Android shell Looper initializer is unavailable");
+        if (prepare == null) throw new UnsupportedOperationException("Android shell Looper initialiser is unavailable");
         call(prepare, null);
     }
 

@@ -134,7 +134,8 @@ public final class ControllerTest {
         check(c.run("prefs").get("appearance") == null && f.calls == 0 && !Files.exists(dir), "Prefs reads only appearance file");
         String valid = "{\"style\":\"MATERIAL3\",\"appearance\":\"DARK\",\"palette\":\"VIOLET\",\"glass\":true,\"reduceMotion\":false}";
         check(Boolean.TRUE.equals(c.run("saveprefs", hex(valid)).get("verified")), "Preferences are atomically verified");
-        check(Json.encode(c.run("prefs").get("appearance")).equals(valid) && f.calls == 0 && !Files.exists(dir), "Appearance persists without state or phone access");
+        check(Json.encode(c.run("prefs").get("appearance")).equals(valid) && f.calls == 0 && Files.isRegularFile(dir.resolve("appearance.json"))
+                && !Files.exists(dir.resolve("state.properties")) && !Files.exists(dir.getParent().resolve("webroot")), "Appearance persists only in data without state or phone access");
         for (String invalid : Arrays.asList("[]", "null", "{\"style\":1}", "{\"unknown\":true}", "{\"glass\":\"true\"}",
                 "{\"palette\":\"$(id)\"}", "{\"glass\":true,\"glass\":false}", "{\"style\":\"MIUIX\",}"))
             rejects(c, "saveprefs", hex(invalid));
@@ -142,6 +143,28 @@ public final class ControllerTest {
         check(f.calls == 0, "Invalid preferences never contact telephony");
         rejects(c, "targets"); rejects(c, "targets", hex("[\"com.zhiliaoapp.musically\"]"));
         check(f.calls == 0, "Removed application-routing actions fail before any phone access");
+    }
+    private static void nativeAppearanceMigrationAndMonet() throws Exception {
+        Fake f = new Fake(); f.unavailable = true; Path dir = directory(); Controller c = controller(dir, f, "boot1");
+        Path legacy = dir.getParent().resolve("webroot/appearance.json"); Files.createDirectories(legacy.getParent());
+        byte[] original = "{\"palette\":\"MINT\",\"glass\":true}".getBytes(StandardCharsets.UTF_8); Files.write(legacy, original);
+        check(((Map<?, ?>) c.run("prefs").get("appearance")).get("palette").equals("MINT") && !Files.exists(dir), "Legacy appearance read does not create data or contact telephony");
+        String monet = "{\"dynamicColour\":false,\"customColour\":\"#a1b2c3\",\"palette\":\"ORCHID\",\"glass\":false}";
+        check(Boolean.TRUE.equals(c.run("saveprefs", hex(monet)).get("verified")), "Native appearance save migrates the old file");
+        Map<?, ?> appearance = (Map<?, ?>) c.run("prefs").get("appearance");
+        check("#A1B2C3".equals(appearance.get("customColour")) && Boolean.FALSE.equals(appearance.get("dynamicColour")), "Monet and manual colour persist with canonical hex");
+        check(!Files.exists(legacy) && Files.isRegularFile(dir.resolve("appearance.json")) && f.calls == 0, "Verified save retires only the old appearance file");
+        byte[] runtime = "runtime bytes must remain unchanged".getBytes(StandardCharsets.UTF_8); Files.write(dir.resolve("runtime.json"), runtime);
+        for (String palette : new String[] {"VIOLET", "LAVENDER", "WISTERIA", "IRIS", "PLUM", "LILAC", "ORCHID", "MAUVE", "PERIWINKLE", "MINT", "BLUE", "ROSE", "SAGE", "CAFE", "SLATE"})
+            check(Boolean.TRUE.equals(c.run("saveprefs", hex("{\"palette\":\"" + palette + "\",\"dynamicColour\":true,\"customColour\":\"\"}")).get("verified")), "Manual palette remains valid: " + palette);
+        check(Arrays.equals(runtime, Files.readAllBytes(dir.resolve("runtime.json"))) && !Files.exists(dir.resolve("state.properties")) && f.calls == 0, "Appearance writes never replace the runtime or SIM settings");
+        byte[] current = Files.readAllBytes(dir.resolve("appearance.json")); Files.write(legacy, current);
+        check(c.run("prefs").get("appearance") != null, "Identical duplicate appearance files are unambiguous");
+        Files.write(legacy, "{\"glass\":true}".getBytes(StandardCharsets.UTF_8));
+        rejects(c, "prefs"); rejects(c, "saveprefs", hex("{}"));
+        check(Arrays.equals(current, Files.readAllBytes(dir.resolve("appearance.json"))) && Files.exists(legacy), "Conflicting duplicates are rejected before either file changes");
+        Files.delete(legacy);
+        for (String invalid : new String[] {"{\"dynamicColour\":1}", "{\"customColour\":\"red\"}", "{\"customColour\":\"#12345\"}", "{\"customColour\":\"#12345z\"}", "{\"palette\":\"OTHER\"}"}) rejects(c, "saveprefs", hex(invalid));
     }
     private static void pathsLocksAndMigration() throws Exception {
         Fake f = new Fake(); Path dir = directory(); Path module = dir.getParent(); Controller c = controller(dir, f, "boot1");
@@ -246,7 +269,7 @@ public final class ControllerTest {
                 && ((Number) engine(status).get("timestampMs")).longValue() > 0, "Current phone generation and ACK time preserved");
         status = c.run("set", "0", "JP", "-");
         check(Boolean.TRUE.equals(status.get("verified")) && !Boolean.TRUE.equals(engine(status).get("applied")), "New plan cannot reuse old configuration ACK");
-        check(Boolean.TRUE.equals(engine(status).get("initialized")), "Old hash leaves the service engine initialized while new configuration is pending");
+        check(Boolean.TRUE.equals(engine(status).get("initialized")), "Old hash leaves the service engine initialised while new configuration is pending");
         Map<String, Object> previousFailure = ack("old-hash");
         previousFailure.put("ok", false); previousFailure.put("applied", false); previousFailure.put("error", "Original SIM journal recovery failed");
         writeAck(dir, previousFailure);
@@ -290,7 +313,7 @@ public final class ControllerTest {
                 Collections.<String, Object>singletonMap("supportsCountry", false),
                 Collections.<String, Object>singletonMap("sdk", 28))) {
             ack = ack(hash); ack.putAll(contradiction); writeAck(dir, ack);
-            check(!Boolean.TRUE.equals(engine(c.run("status")).get("applied")), "Uninitialized or unsupported service engine cannot confirm global publication");
+            check(!Boolean.TRUE.equals(engine(c.run("status")).get("applied")), "Uninitialised or unsupported service engine cannot confirm global publication");
         }
         for (Map<String, Object> invalid : Arrays.asList(
                 Collections.<String, Object>singletonMap("ok", "true"), Collections.<String, Object>singletonMap("hooks", Arrays.asList(1, 2)),
@@ -312,7 +335,7 @@ public final class ControllerTest {
         hash = (String) c.run("status").get("currentConfigHash");
         ack = ack(hash); ack.put("applied", false); writeAck(dir, ack);
         status = c.run("status");
-        check(Boolean.TRUE.equals(engine(status).get("initialized")) && Boolean.FALSE.equals(engine(status).get("applied")), "Phone engine can remain initialized with no active profiles");
+        check(Boolean.TRUE.equals(engine(status).get("initialized")) && Boolean.FALSE.equals(engine(status).get("applied")), "Phone engine can remain initialised with no active profiles");
         Files.write(dir.getParent().resolve("disable"), new byte[0]);
         check(c.run("status").containsKey("globalEngine") && Boolean.TRUE.equals(c.run("runtime").get("readOnly")), "Disabled module still reports engine metadata and inactive global runtime");
         unchanged(f);
@@ -340,7 +363,7 @@ public final class ControllerTest {
         check("".equals(fallback.get("moduleVersion")) && ((Number) fallback.get("moduleVersionCode")).intValue() == 0, "Missing optional fixture metadata uses harmless version defaults");
     }
     public static void main(String[] args) throws Exception {
-        inputsAndMerge(); isolationAndIdentity(); appearanceWithoutApplicationRouting(); pathsLocksAndMigration(); globalEngineAcknowledgment(); strictJson(); upgradeStatusAndSchemas();
+        inputsAndMerge(); isolationAndIdentity(); appearanceWithoutApplicationRouting(); pathsLocksAndMigration(); globalEngineAcknowledgment(); strictJson(); upgradeStatusAndSchemas(); nativeAppearanceMigrationAndMonet();
         System.out.println("Controller v5: " + checks + " global-protocol/module-file checks passed");
     }
 }

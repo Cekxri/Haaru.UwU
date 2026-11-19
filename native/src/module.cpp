@@ -270,7 +270,7 @@ bool exchange(const Json& shadow, const Json& ack, Json& response, const char* p
     close(channel); channel = -1;
     return false;
 }
-// Consume the reply so a diagnostic checkpoint cannot desynchronize runtime requests.
+// Consume the reply so a diagnostic checkpoint cannot desynchronise runtime requests.
 void checkpoint() {
     Json response;
     (void)exchange(Json{}, acknowledgement(false, false, false), response, "diagnostic");
@@ -555,7 +555,7 @@ bool restore(JNIEnv* env) {
     return first && second;
 }
 bool apply(JNIEnv* env, const Json& plan, std::string& error, uint64_t& acceptedRevision) {
-    if (!engineReady || !guardsReady || !baselineReady) { error = "Central phone engine is not initialized"; return false; }
+    if (!engineReady || !guardsReady || !baselineReady) { error = "Central phone engine is not initialised"; return false; }
     {
         LocalFrame frame(env);
         if (!frame.valid) { recordJniFailure(env, "Cannot allocate SIM capability validation frame"); error = "Cannot validate SIM field support"; return false; }
@@ -686,7 +686,7 @@ void attached(JNIEnv* env, jclass, jobject context) {
         engineReady = diagnostic().second.empty();
         setStage("runtime");
     } catch (const std::exception& failure) { recordJniFailure(env, failure.what()); }
-    catch (...) { recordJniFailure(env, "Unknown central service initialization failure"); }
+    catch (...) { recordJniFailure(env, "Unknown central service initialisation failure"); }
     try { std::thread(engineLoop).detach(); }
     catch (const std::exception& failure) {
         recordFailure("engine-thread", std::string("Cannot start the central engine thread: ") + failure.what());
@@ -747,7 +747,7 @@ void Module::preAppSpecialize(zygisk::AppSpecializeArgs* args) {
             baseName = initial["shadow"]["nameList"].get<std::string>();
         }
         baselineReady = true;
-        selected = true; // post must restore a cached baseline even if guard initialization fails.
+        selected = true; // post must restore a cached baseline even if guard initialisation fails.
         requireJni(env, env->GetJavaVM(&javaVm) == JNI_OK, "JavaVM unavailable");
         setStage("property-guards");
         auto binder = env->FindClass("android/os/Binder");
@@ -876,7 +876,7 @@ void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
         }
         setStage("lsplant-init");
         checkpoint();
-        requireJni(env, lsplant::Init(env, info), "LSPlant initialization failed");
+        requireJni(env, lsplant::Init(env, info), "LSPlant initialisation failed");
         setStage("dex-trust");
         for (auto cookie : cookies) requireJni(env, lsplant::MakeDexFileTrusted(env, cookie), "Cannot trust the module hook DEX");
         setStage("hook-class");

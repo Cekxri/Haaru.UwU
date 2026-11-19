@@ -12,7 +12,7 @@ public final class UpgradeTest {
     private static Path module(Path root, String parent) throws Exception {
         Path module = root.resolve(parent).resolve("haaru"); Files.createDirectories(module);
         Files.write(module.resolve("module.prop"), "id=haaru\nversion=0.5.1\nversionCode=7\n".getBytes(StandardCharsets.UTF_8));
-        Files.createDirectories(module.resolve("webroot")); return module;
+        return module;
     }
     private static Properties properties(String schema) {
         Properties p = new Properties(); if (schema != null) p.setProperty("schema", schema);
@@ -32,6 +32,12 @@ public final class UpgradeTest {
     private static Properties load(Path module) throws Exception {
         Properties p = new Properties(); try (InputStream in = Files.newInputStream(module.resolve("data/state.properties"))) { p.load(in); } return p;
     }
+    private static void appearance(Path module, byte[] bytes) throws Exception {
+        Files.createDirectories(module.resolve("data")); Files.write(module.resolve("data/appearance.json"), bytes);
+    }
+    private static void legacyAppearance(Path module, byte[] bytes) throws Exception {
+        Files.createDirectories(module.resolve("webroot")); Files.write(module.resolve("webroot/appearance.json"), bytes);
+    }
     private static void rejects(Path source, Path destination) throws Exception {
         try { Upgrade.migrate(source, destination); throw new AssertionError("Expected rejected migration"); }
         catch (IOException | IllegalArgumentException expected) { checks++; }
@@ -42,7 +48,7 @@ public final class UpgradeTest {
         original.setProperty("baseline.0.country", "stale"); save(source, original);
         byte[] sourceBytes = Files.readAllBytes(source.resolve("data/state.properties"));
         byte[] appearance = "{\"style\":\"MATERIAL3\",\"appearance\":\"DARK\",\"palette\":\"BLUE\",\"glass\":true}".getBytes(StandardCharsets.UTF_8);
-        Files.write(source.resolve("webroot/appearance.json"), appearance);
+        appearance(source, appearance);
         for (String transientFile : Arrays.asList("runtime.json", "global-status.json", "global-shadow.json", "global-transaction.json", "left.tmp"))
             Files.write(source.resolve("data").resolve(transientFile), "old-boot-data".getBytes(StandardCharsets.UTF_8));
         Files.write(source.resolve("update"), new byte[0]);
@@ -54,7 +60,8 @@ public final class UpgradeTest {
             check(original.getProperty(key).equals(copied.getProperty(key)), "Durable field preserved: " + key);
         check(!copied.containsKey("targetPackages") && !copied.containsKey("baseline.0.country"), "Obsolete routing and snapshot fields are excluded");
         check(Arrays.equals(sourceBytes, Files.readAllBytes(source.resolve("data/state.properties"))), "Installed settings remain byte identical");
-        check(Arrays.equals(appearance, Files.readAllBytes(dest.resolve("webroot/appearance.json"))), "Appearance snapshot preserved byte exactly");
+        check(Arrays.equals(appearance, Files.readAllBytes(dest.resolve("data/appearance.json"))), "Appearance snapshot preserved byte exactly");
+        check(!Files.exists(dest.resolve("webroot")), "New migration never creates Webroot");
         check(Arrays.equals(metadata, Files.readAllBytes(dest.resolve("module.prop"))), "New module metadata is not replaced");
         for (String name : Arrays.asList("runtime.json", "global-status.json", "global-shadow.json", "global-transaction.json", "lock", "left.tmp"))
             check(!Files.exists(dest.resolve("data").resolve(name)), "Boot and process state excluded: " + name);
@@ -83,12 +90,12 @@ public final class UpgradeTest {
         }
         save(source, properties("5"));
         for (byte[] bad : new byte[][] {"{\"style\":\"other\"}".getBytes(StandardCharsets.UTF_8), new byte[] {(byte)0xc0, (byte)0xaf}, new byte[2049]}) {
-            Files.write(source.resolve("webroot/appearance.json"), bad); rejects(source, dest);
+            appearance(source, bad); rejects(source, dest);
             check(Arrays.equals(staged, Files.readAllBytes(dest.resolve("data/state.properties"))), "All source files validated before staged state commit");
         }
-        Files.delete(source.resolve("webroot/appearance.json")); Files.createDirectory(dest.resolve("webroot/appearance.json"));
+        Files.delete(source.resolve("data/appearance.json")); Files.createDirectory(dest.resolve("data/appearance.json"));
         rejects(source, dest); check(Arrays.equals(staged, Files.readAllBytes(dest.resolve("data/state.properties"))), "Unsafe second destination cannot partially commit the first");
-        Files.delete(dest.resolve("webroot/appearance.json")); Files.write(source.resolve("remove"), new byte[0]);
+        Files.delete(dest.resolve("data/appearance.json")); Files.write(source.resolve("remove"), new byte[0]);
         rejects(source, dest); check(Arrays.equals(staged, Files.readAllBytes(dest.resolve("data/state.properties"))), "Removed module is never resurrected into staging");
         Files.delete(source.resolve("remove")); rejects(source, source);
         Files.write(dest.resolve("module.prop"), "id=other\n".getBytes(StandardCharsets.UTF_8)); rejects(source, dest);
@@ -105,7 +112,7 @@ public final class UpgradeTest {
         check("false".equals(load(dest).getProperty("profile.1.enabled")), "Legacy profile missing subscription identity is kept inactive");
         legacy.remove("schema"); save(source, legacy); Upgrade.migrate(source, dest);
         check("5".equals(load(dest).getProperty("schema")), "Known schema-less legacy properties are migrated");
-        Path prefsSource = module(root, "prefs-only"); Files.write(prefsSource.resolve("webroot/appearance.json"), "{}".getBytes(StandardCharsets.UTF_8));
+        Path prefsSource = module(root, "prefs-only"); legacyAppearance(prefsSource, "{}".getBytes(StandardCharsets.UTF_8));
         Map<String, Object> result = Upgrade.migrate(prefsSource, dest);
         check(!Files.exists(prefsSource.resolve("data")), "Appearance-only migration does not create installed data");
         check(!Files.exists(dest.resolve("data/state.properties")) && !Boolean.TRUE.equals(result.get("settingsPreserved")), "Absent source settings cannot revive stale staged profiles");
@@ -128,10 +135,10 @@ public final class UpgradeTest {
         Path root = Files.createTempDirectory("haaru-upgrade-rollback-"); Path source = module(root, "live"), dest = module(root, "stage");
         Properties sourceProperties = properties("5"); sourceProperties.setProperty("profile.0.country", "jp"); save(source, sourceProperties);
         save(dest, properties("5"));
-        Files.write(source.resolve("webroot/appearance.json"), "{\"style\":\"MATERIAL3\"}".getBytes(StandardCharsets.UTF_8));
-        Files.write(dest.resolve("webroot/appearance.json"), "{\"style\":\"MIUIX\"}".getBytes(StandardCharsets.UTF_8));
+        appearance(source, "{\"style\":\"MATERIAL3\"}".getBytes(StandardCharsets.UTF_8));
+        appearance(dest, "{\"style\":\"MIUIX\"}".getBytes(StandardCharsets.UTF_8));
         byte[] beforeState = Files.readAllBytes(dest.resolve("data/state.properties"));
-        byte[] beforeAppearance = Files.readAllBytes(dest.resolve("webroot/appearance.json"));
+        byte[] beforeAppearance = Files.readAllBytes(dest.resolve("data/appearance.json"));
         byte[] original = Files.readAllBytes(source.resolve("data/state.properties"));
         for (final String interruptedFile : Arrays.asList("state.properties", "appearance.json", "disable")) {
             try {
@@ -143,13 +150,29 @@ public final class UpgradeTest {
                 throw new AssertionError("Expected interruption");
             } catch (IOException expected) { checks++; }
             check(Arrays.equals(beforeState, Files.readAllBytes(dest.resolve("data/state.properties"))), "Interrupted commit rolls staged state back byte exactly");
-            check(Arrays.equals(beforeAppearance, Files.readAllBytes(dest.resolve("webroot/appearance.json"))), "Interrupted commit rolls staged appearance back byte exactly");
+            check(Arrays.equals(beforeAppearance, Files.readAllBytes(dest.resolve("data/appearance.json"))), "Interrupted commit rolls staged appearance back byte exactly");
             check(Arrays.equals(original, Files.readAllBytes(source.resolve("data/state.properties"))), "Interrupted commit never changes installed settings");
             check(!Files.exists(dest.resolve("disable")), "Rollback leaves lifecycle marker as it was");
         }
     }
+    private static void legacyAndNativeAppearancePaths() throws Exception {
+        Path root = Files.createTempDirectory("haaru-pref-paths-"); Path source = module(root, "live"), dest = module(root, "stage");
+        byte[] legacy = "{\"palette\":\"BLUE\",\"glass\":true}".getBytes(StandardCharsets.UTF_8); legacyAppearance(source, legacy);
+        Upgrade.migrate(source, dest);
+        check(Arrays.equals(legacy, Files.readAllBytes(dest.resolve("data/appearance.json"))) && !Files.exists(dest.resolve("webroot")), "Legacy preferences move only into data");
+        check(!Files.exists(source.resolve("data")) && Arrays.equals(legacy, Files.readAllBytes(source.resolve("webroot/appearance.json"))), "Legacy source remains untouched");
+        appearance(source, legacy); Upgrade.migrate(source, dest);
+        legacyAppearance(source, "{\"glass\":false}".getBytes(StandardCharsets.UTF_8)); rejects(source, dest);
+        check(Arrays.equals(legacy, Files.readAllBytes(dest.resolve("data/appearance.json"))), "Conflicting duplicates cannot replace staged appearance");
+        Files.delete(source.resolve("webroot/appearance.json"));
+        for (String palette : Arrays.asList("VIOLET", "LAVENDER", "WISTERIA", "IRIS", "PLUM", "LILAC", "ORCHID", "MAUVE", "PERIWINKLE", "MINT", "BLUE", "ROSE", "SAGE", "CAFE", "SLATE")) {
+            byte[] modern = ("{\"palette\":\"" + palette + "\",\"dynamicColour\":false,\"customColour\":\"#aabbcc\"}").getBytes(StandardCharsets.UTF_8);
+            appearance(source, modern); Upgrade.migrate(source, dest);
+            check(Arrays.equals(modern, Files.readAllBytes(dest.resolve("data/appearance.json"))), "Native palette and Monet fields are preserved: " + palette);
+        }
+    }
     public static void main(String[] args) throws Exception {
-        preservationAndRepeatedUpdate(); invalidSourceAndAtomicValidation(); locksLegacyAndAppearanceOnly(); unsafeLinks(); interruptedCommitRollback();
+        preservationAndRepeatedUpdate(); invalidSourceAndAtomicValidation(); locksLegacyAndAppearanceOnly(); unsafeLinks(); interruptedCommitRollback(); legacyAndNativeAppearancePaths();
         System.out.println("Upgrade migration: " + checks + " preservation and rejection checks passed (no Android device claim)");
     }
 }

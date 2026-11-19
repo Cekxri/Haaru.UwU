@@ -1,112 +1,61 @@
-/*
- * Haaru native Compose theme, Apache-2.0.
- * Uses the actual Miuix 0.9.4 and Compose Material 3 components.
- * API compatibility references are recorded in research/miuix-material3-ui-review.md.
- */
+/* Haaru native theme, Apache-2.0. Android wallpaper roles are shared by both toolkits. */
 package haaru.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button as MdButton
-import androidx.compose.material3.Card as MdCard
-import androidx.compose.material3.CardDefaults as MdCardDefaults
+import android.app.WallpaperManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.FilledTonalButton as MdTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField as MdField
-import androidx.compose.material3.RadioButton as MdRadioButton
-import androidx.compose.material3.Switch as MdSwitch
-import androidx.compose.material3.Text as MdText
 import androidx.compose.material3.Typography
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.darkColorScheme as mdDarkColors
 import androidx.compose.material3.lightColorScheme as mdLightColors
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.withFrameNanos
-import kotlinx.coroutines.launch
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.paneTitle
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.disabled
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.dp
 import com.materialkolor.dynamiccolor.ColorSpec
 import com.materialkolor.hct.Hct
 import com.materialkolor.scheme.DynamicScheme
-import com.materialkolor.scheme.SchemeTonalSpot
-import top.yukonga.miuix.kmp.basic.Button as MiButton
-import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card as MiCard
-import top.yukonga.miuix.kmp.basic.RadioButton as MiRadioButton
-import top.yukonga.miuix.kmp.basic.Switch as MiSwitch
-import top.yukonga.miuix.kmp.basic.Text as MiText
-import top.yukonga.miuix.kmp.basic.TextField as MiField
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import com.materialkolor.scheme.SchemeFidelity
+import top.yukonga.miuix.kmp.theme.Colors as MiuixColours
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.ThemeColorSpec
-import top.yukonga.miuix.kmp.theme.ThemeController
-import top.yukonga.miuix.kmp.theme.ThemePaletteStyle
 import top.yukonga.miuix.kmp.theme.defaultTextStyles
 
-/**
- * Both color/typography locals remain available to common content, with the selected
- * design system innermost so its indications and overscroll behavior take precedence.
- * Preferences are owned by the caller; changing this theme never runs a root command.
- */
+val LocalDynamicColourActive = staticCompositionLocalOf { false }
+internal data class ColourRoles(val scheme: ColorScheme, val dynamicActive: Boolean)
+internal fun resolveColourRoles(dynamic: Boolean, sdk: Int, wallpaper: () -> ColorScheme, manual: () -> ColorScheme): ColourRoles {
+    if (dynamic && sdk >= 31) runCatching { wallpaper() }.getOrNull()?.let { return ColourRoles(it, true) }
+    return ColourRoles(manual(), false)
+}
+
+/** The Android resource scheme supplies actual Google Monet colours, without a fixed seed. */
 @Composable
-fun DualTheme(
-    style: UiStyle,
-    dark: Boolean,
-    seed: Color,
-    fontFamily: FontFamily,
-    content: @Composable () -> Unit,
-) {
-    val miController = remember(dark, seed) {
-        ThemeController(
-            colorSchemeMode = ColorSchemeMode.MonetSystem,
-            keyColor = seed,
-            isDark = dark,
-            paletteStyle = ThemePaletteStyle.TonalSpot,
-            colorSpec = ThemeColorSpec.Spec2021,
-        )
+fun DualTheme(style: UiStyle, dark: Boolean, seed: Color, fontFamily: FontFamily,
+              dynamicColour: Boolean = true, content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    var wallpaperRevision by remember { mutableIntStateOf(0) }
+    DisposableEffect(context, dynamicColour) {
+        if (dynamicColour && Build.VERSION.SDK_INT >= 31) {
+            val manager = WallpaperManager.getInstance(context)
+            val listener = WallpaperManager.OnColorsChangedListener { _, _ -> wallpaperRevision++ }
+            val registered = runCatching { manager.addOnColorsChangedListener(listener, Handler(Looper.getMainLooper())) }.isSuccess
+            onDispose { if (registered) runCatching { manager.removeOnColorsChangedListener(listener) } }
+        } else onDispose { }
     }
+    val roles = remember(context, configuration, wallpaperRevision, dark, seed, dynamicColour) {
+        resolveColourRoles(dynamicColour, Build.VERSION.SDK_INT, wallpaper = {
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }, manual = { manualMaterialColours(dark, seed) })
+    }
+    val mdColors = roles.scheme
+    val miColors = remember(mdColors, dark) { miuixColours(mdColors, dark) }
     val miTypography = remember(fontFamily) {
         val defaults = defaultTextStyles()
         defaults.copy(
@@ -126,7 +75,6 @@ fun DualTheme(
             title4 = defaults.title4.copy(fontFamily = fontFamily),
         )
     }
-    val mdColors = remember(dark, seed) { materialColors(dark, seed) }
     val mdTypography = remember(fontFamily) {
         val defaults = Typography()
         defaults.copy(
@@ -147,19 +95,52 @@ fun DualTheme(
             labelSmall = defaults.labelSmall.copy(fontFamily = fontFamily),
         )
     }
-    when (style) {
+    CompositionLocalProvider(LocalDynamicColourActive provides roles.dynamicActive) { when (style) {
         UiStyle.MIUIX -> MaterialTheme(colorScheme = mdColors, typography = mdTypography) {
-            MiuixTheme(controller = miController, textStyles = miTypography, content = content)
+            MiuixTheme(colors = miColors, textStyles = miTypography, content = content)
         }
-        UiStyle.MATERIAL3 -> MiuixTheme(controller = miController, textStyles = miTypography) {
+        UiStyle.MATERIAL3 -> MiuixTheme(colors = miColors, textStyles = miTypography) {
             MaterialTheme(colorScheme = mdColors, typography = mdTypography, content = content)
         }
-    }
+    } }
 }
 
-/** Material color utilities generate coherent roles for both light and dark palettes. */
-private fun materialColors(dark: Boolean, seed: Color): ColorScheme {
-    val scheme = SchemeTonalSpot(
+/** Project the same colour roles onto Miuix controls, including readable disabled states. */
+internal fun miuixColours(md: ColorScheme, dark: Boolean): MiuixColours {
+    val disabled = md.onSurface.copy(alpha = .12f).compositeOver(md.surface)
+    val disabledText = md.onSurface.copy(alpha = .38f).compositeOver(disabled)
+    return MiuixColours(
+        primary = md.primary, onPrimary = md.onPrimary,
+        primaryVariant = md.primaryContainer, onPrimaryVariant = md.onPrimaryContainer,
+        error = md.error, onError = md.onError, errorContainer = md.errorContainer, onErrorContainer = md.onErrorContainer,
+        disabledPrimary = disabled, disabledOnPrimary = disabledText,
+        disabledPrimaryButton = disabled, disabledOnPrimaryButton = disabledText, disabledPrimarySlider = disabled,
+        primaryContainer = md.primaryContainer, onPrimaryContainer = md.onPrimaryContainer,
+        secondary = md.outlineVariant, onSecondary = md.onSurfaceVariant,
+        secondaryVariant = md.surfaceContainerHigh, onSecondaryVariant = md.onSurface,
+        disabledSecondary = disabled, disabledOnSecondary = disabledText,
+        disabledSecondaryVariant = disabled, disabledOnSecondaryVariant = disabledText,
+        secondaryContainer = md.secondaryContainer, onSecondaryContainer = md.onSecondaryContainer,
+        secondaryContainerVariant = md.surfaceContainerHighest, onSecondaryContainerVariant = md.onSurfaceVariant,
+        tertiaryContainer = md.tertiaryContainer, onTertiaryContainer = md.onTertiaryContainer,
+        tertiaryContainerVariant = md.onTertiaryContainer,
+        background = md.background, onBackground = md.onBackground, onBackgroundVariant = md.primary,
+        surface = md.surface, onSurface = md.onSurface, surfaceVariant = md.surfaceVariant,
+        onSurfaceSecondary = md.onSurface, onSurfaceVariantSummary = md.onSurfaceVariant,
+        onSurfaceVariantActions = md.onSurfaceVariant, disabledOnSurface = disabledText,
+        surfaceContainer = md.surfaceContainer, onSurfaceContainer = md.onSurface,
+        onSurfaceContainerVariant = md.onSurfaceVariant, surfaceContainerHigh = md.surfaceContainerHigh,
+        onSurfaceContainerHigh = md.onSurface, surfaceContainerHighest = md.surfaceContainerHighest,
+        onSurfaceContainerHighest = md.onSurface, outline = md.outline, dividerLine = md.outlineVariant,
+        windowDimming = md.scrim.copy(alpha = if (dark) .55f else .35f),
+        sliderKeyPoint = md.primary, sliderKeyPointForeground = md.onPrimary,
+        sliderBackground = md.primary.copy(alpha = .20f).compositeOver(md.surface)
+    )
+}
+
+/** Manual seeds generate a coherent scheme when wallpaper colours are disabled or unavailable. */
+internal fun manualMaterialColours(dark: Boolean, seed: Color): ColorScheme {
+    val scheme = SchemeFidelity(
         sourceColorHct = Hct.fromInt(seed.toArgb()),
         isDark = dark,
         contrastLevel = 0.0,

@@ -13,6 +13,17 @@ haaru_file_hash() {
     [ "${#HAARU_READ_HASH}" -eq 64 ] || return 2
     printf '%s' "$HAARU_READ_HASH"
 }
+haaru_source_prefs_path() {
+    HAARU_NEW_PREFS=$(haaru_file_hash "$1/data/appearance.json") || return 2
+    HAARU_OLD_PREFS=$(haaru_file_hash "$1/webroot/appearance.json") || return 2
+    if [ "$HAARU_NEW_PREFS" != absent ] && [ "$HAARU_OLD_PREFS" != absent ] &&
+       [ "$HAARU_NEW_PREFS" != "$HAARU_OLD_PREFS" ]; then return 2; fi
+    if [ "$HAARU_NEW_PREFS" = absent ] && [ "$HAARU_OLD_PREFS" != absent ]; then
+        printf 'webroot/appearance.json'
+    else
+        printf 'data/appearance.json'
+    fi
+}
 haaru_find_upgrade() {
     HAARU_FOUND=
     HAARU_COMMITTED_SOURCE=
@@ -43,7 +54,7 @@ haaru_find_upgrade() {
             continue
         fi
         if [ -n "$HAARU_FOUND" ]; then
-            echo "Multiple installed Haaru modules were found; no settings source was guessed." >&2
+            echo "🍞 找到不止一個 Haaru，沒有猜選。 / More than one Haaru module was found; none was guessed." >&2
             return 2
         fi
         HAARU_FOUND=$HAARU_CANDIDATE

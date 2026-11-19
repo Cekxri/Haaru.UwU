@@ -8,7 +8,7 @@
 
 namespace haaru {
 
-// Initialize before publishing the resolver to LSPlant. After initialization,
+// Initialise before publishing the resolver to LSPlant. After initialisation,
 // lookups only read this object's immutable symbol index.
 class ArtSymbols final {
 public:

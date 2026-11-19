@@ -53,10 +53,10 @@ int main() {
     rejects<std::invalid_argument>([] { overlayProperty("tw", {{8, "US", ""}}, true); }, "logical slot above supported bound rejected");
     const std::string malformedUtf8("\xed\xa0\x80", 3); // Lone UTF-16 surrogate encoded by a JNI converter.
     nlohmann::json badShadow{{"bootId", "fixture-boot"}, {"countryList", "tw"}, {"nameList", malformedUtf8}};
-    check(!haaru::rustValidShadow(badShadow, "fixture-boot"), "invalid UTF8 serialization is contained before JNI shadow validation");
+    check(!haaru::rustValidShadow(badShadow, "fixture-boot"), "invalid UTF8 serialisation is contained before JNI shadow validation");
     nlohmann::json badRuntime{{"protocol", 2}, {"global", true}, {"engine", "system-global-volatile"},
         {"bootId", "fixture-boot"}, {"profiles", nlohmann::json::array({{{"slot", 0}, {"subId", 1}, {"country", "us"}, {"carrierName", malformedUtf8}}})}};
-    check(!haaru::rustValidRuntime(badRuntime, "fixture-boot"), "invalid UTF8 runtime serialization cannot escape the native boundary");
+    check(!haaru::rustValidRuntime(badRuntime, "fixture-boot"), "invalid UTF8 runtime serialisation cannot escape the native boundary");
     badShadow["nameList"] = "Original";
     check(haaru::rustValidShadow(badShadow, "fixture-boot"), "valid JNI shadow reaches and passes the Rust validator");
     check(haaru::resolveDeviceSdk(36, "35") == 36, "positive actual API result wins over property fallback");

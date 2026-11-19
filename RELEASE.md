@@ -1,18 +1,18 @@
-# Haaru 0.7.0 發佈
+# Haaru 0.7.1 發佈
 
 ## 安裝檔案
 
 | 檔案 | 用途 |
 | --- | --- |
-| `Haaru-0.7.0.zip` | 在 KernelSU 刷入模組，完成後完整重啟 |
-| `Haaru-0.7.0.apk` | 安裝原生介面，透過模組 IPC 操作設定 |
-| `Haaru-0.7.0-source.zip` | 模組與 App 原始碼，不含私人簽章 |
+| `Haaru-0.7.1.zip` | 在 KernelSU 刷入模組，包含同版 APK，完成後完整重啟 |
+| `Haaru-0.7.1.apk` | 原生介面 APK，可覆蓋更新或另外安裝 |
+| `Haaru-0.7.1-source.zip` | 模組與 App 原始碼，不含私人簽章 |
 | `SHA256SUMS.txt` | 三個檔案的 SHA256 |
 | `build-manifest.json`／`companion-build-manifest.json` | 來源、工具、版本、產物與簽章指紋 |
 | `release-verification.json` | 實際發佈包與 APK 驗證結果 |
 | `device-report.json` | 單獨記錄具體設備和真機測試 scope |
 
-模組 ZIP 與 APK 分開安裝；ZIP 不附帶自動 APK 安裝器。KSU 第一按鈕開啟 Haaru，第二按鈕開啟 App 說明與 Classic 相容介面。首次安裝没有啟用配置。
+模組 ZIP 包含同版已簽 APK，刷入時自動安裝；Android 尚未就緒時，於開機後續裝。KSU 執行按鈕開啟原生 App，缺少 App 時重試安裝 ZIP 內的同版本 APK。首次安裝沒有啟用配置。
 
 App 無需獨立 superuser 授權。Root 由 KSU 模組執行，模組 IPC 服務驗證真實 peer UID／安裝 package UID／APK signer 後，只接受固定設定／狀態命令。公開 `companion.prop` pin 由已驗證 APK 生成，更新同簽章 APK 不受 versionCode 鎖定。
 
@@ -21,7 +21,7 @@ App 無需獨立 superuser 授權。Root 由 KSU 模組執行，模組 IPC 服�
 - 改為原生 Compose Android 介面，主流程不再啟動 WebView WASM、載入大型字型或顯示 JSON。
 - 修復 contextless TelephonyManager 建立 subscription manager 的 null Context 崩潰；原始 carrier label 獨立讀取。
 - 保留實際中央引擎初始化原因，另顯示 ACK 格式／SDK 驗證錯誤。
-- 保留原 SIM 設定、內部 module ID、Rust 核心與覆蓋更新流程。
+- 保留原 SIM 設定、Rust 核心與覆蓋更新流程；早期內部 module ID 的設定依驗證過的移轉流程保存。
 - App 通訊改為模組提供的受限 LocalSocket IPC，免獨立 superuser 授權；Root 服務驗證 UID、package 與實際 APK signer。
 
 App 編譯／可開啟與 SIM 全域效果是不同驗收；具体成功項目以當前真機報告為準。

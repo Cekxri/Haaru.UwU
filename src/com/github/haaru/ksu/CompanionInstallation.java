@@ -22,6 +22,7 @@ public final class CompanionInstallation {
         Info installed(String packageName) throws Exception;
         void install(Path apk, long bytes) throws Exception;
     }
+    interface ProcessStarter { java.lang.Process start(String[] command) throws IOException; }
     static final class Pending extends IOException { Pending(String message) { super(message); } }
     static final class Info {
         final String packageName, version, certificate, apkSha256;
@@ -46,11 +47,13 @@ public final class CompanionInstallation {
 
     public static void main(String[] args) {
         Path module = null;
+        String stage = "android-runtime";
         Map<String, Object> result;
         try {
             AndroidBackend.checkRootAndSdk();
             if (args.length != 2 || !"--module".equals(args[0])) throw new IOException("Expected --module DIRECTORY");
             module = Haaru.validateModule(Paths.get(args[1]));
+            stage = "metadata";
             if (Files.exists(module.resolve("remove"), LinkOption.NOFOLLOW_LINKS)) throw new IOException("Module is being removed");
             Plan plan = plan(module);
             Path data = module.resolve("data"); Controller.rejectLinks(data); Files.createDirectories(data);
@@ -58,10 +61,13 @@ public final class CompanionInstallation {
             try (FileChannel channel = FileChannel.open(lock, StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 FileLock acquired = channel.tryLock();
                 if (acquired == null) result = result("pending", "App installation is already running", false, plan, null);
-                else try { result = run(plan, new AndroidPlatform()); } finally { acquired.release(); }
+                else try { stage = "platform-initialize"; result = run(plan, new AndroidPlatform()); } finally { acquired.release(); }
             }
-        } catch (Pending pending) { result = result("pending", pending.getMessage(), false, null, null); }
-        catch (Exception error) { result = result("error", message(error), false, null, null); }
+        } catch (Pending pending) { result = stagedResult("pending", pending.getMessage(), false, null, null, stage); }
+        catch (Exception | LinkageError error) {
+            result = stagedResult("error", message(error), false, null, null, stage);
+            if (module != null) savePrivateDiagnostic(module, stage, error, "", "");
+        }
         if (module != null) try { saveStatus(module, result); } catch (Exception failure) {
             result = result("error", "Cannot save App installation status: " + message(failure), false, null, null);
         }
@@ -71,12 +77,15 @@ public final class CompanionInstallation {
 
     static Map<String, Object> run(Plan plan, Platform platform) {
         Info installed = null;
+        String stage = "bundle-hash";
         try {
             Controller.rejectLinks(plan.apk);
             if (!Files.isRegularFile(plan.apk, LinkOption.NOFOLLOW_LINKS) || Files.size(plan.apk) != plan.bytes
                     || !plan.apkSha256.equals(hash(plan.apk))) throw new IOException("Bundled App hash or size differs");
+            stage = "archive-parse";
             Info bundled = platform.bundled(plan.apk);
             if (!exact(plan, bundled)) throw new IOException("Bundled App package, version, signer or protocol differs");
+            stage = "installed-query";
             installed = platform.installed(plan.packageName);
             if (installed != null) {
                 if (!plan.packageName.equals(installed.packageName) || !plan.certificate.equals(installed.certificate))
@@ -88,13 +97,18 @@ public final class CompanionInstallation {
                 }
                 if (exact(plan, installed)) return result("ready", "Matching App is already installed", true, plan, installed);
             }
+            stage = "package-install";
             platform.install(plan.apk, plan.bytes);
+            stage = "installed-verify";
             Info after = platform.installed(plan.packageName);
             if (after == null) throw new Pending("PackageManager has not confirmed App installation yet");
             if (!exact(plan, after)) throw new IOException("Installed App verification differs after PackageManager finished");
             return result("installed", "Matching App was installed automatically", true, plan, after);
-        } catch (Pending unavailable) { return result("pending", unavailable.getMessage(), false, plan, installed); }
-        catch (Exception failure) { return result("error", message(failure), false, plan, installed); }
+        } catch (Pending unavailable) { return stagedResult("pending", unavailable.getMessage(), false, plan, installed, stage); }
+        catch (Exception | LinkageError failure) {
+            savePrivateDiagnostic(plan.apk.getParent().getParent(), stage, failure, "", "");
+            return stagedResult("error", message(failure), false, plan, installed, stage);
+        }
     }
 
     private static boolean exact(Plan expected, Info info) {
@@ -155,6 +169,25 @@ public final class CompanionInstallation {
         if (installed != null) { value.put("installedVersion", installed.version); value.put("installedVersionCode", installed.versionCode); }
         return value;
     }
+    private static Map<String, Object> stagedResult(String state, String message, boolean verified, Plan plan, Info installed, String stage) {
+        Map<String, Object> value = result(state, message, verified, plan, installed); value.put("stage", stage); return value;
+    }
+    private static void savePrivateDiagnostic(Path directory, String stage, Throwable error, String stdout, String stderr) {
+        try {
+            Path module = Haaru.validateModule(directory), data = module.resolve("data");
+            Controller.rejectLinks(data); Files.createDirectories(data);
+            Path target = data.resolve("companion-install-debug.log"); Controller.rejectLinks(target);
+            StringWriter trace = new StringWriter(); if (error != null) error.printStackTrace(new PrintWriter(trace));
+            String prior = Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) && Files.size(target) <= 32768
+                    ? new String(Files.readAllBytes(target), StandardCharsets.UTF_8) : "";
+            String text = prior + "\nstage=" + stage + "\n" + trace.toString() + "\nstdout:\n" + stdout + "\nstderr:\n" + stderr;
+            byte[] bytes = text.getBytes(StandardCharsets.UTF_8); if (bytes.length > 32768) bytes = Arrays.copyOfRange(bytes, bytes.length - 32768, bytes.length);
+            try (FileChannel file = FileChannel.open(target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+                java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(bytes); while (buffer.hasRemaining()) file.write(buffer); file.force(true);
+            }
+        } catch (Exception ignored) { /* Never let private diagnostics replace the installation outcome. */ }
+    }
     private static void saveStatus(Path module, Map<String, Object> value) throws Exception {
         Path data = module.resolve("data"); Controller.rejectLinks(data); Files.createDirectories(data);
         Path target = data.resolve(STATUS_FILE); Controller.rejectLinks(target);
@@ -180,13 +213,20 @@ public final class CompanionInstallation {
     private static String hex(byte[] bytes) {
         StringBuilder out = new StringBuilder(); for (byte value : bytes) { out.append(Character.forDigit((value & 255) >>> 4, 16)); out.append(Character.forDigit(value & 15, 16)); } return out.toString();
     }
-    private static String message(Exception error) {
+    private static String message(Throwable error) {
         String text = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage(); return text.substring(0, Math.min(text.length(), 1200));
     }
 
-    private static final class AndroidPlatform implements Platform {
+    static final class AndroidPlatform implements Platform {
         final Object pm; final Class<?> pmType, infoType, appType;
+        final ProcessStarter starter;
         AndroidPlatform() throws Exception {
+            this(new ProcessStarter() {
+                @Override public java.lang.Process start(String[] command) throws IOException { return new ProcessBuilder(command).start(); }
+            });
+        }
+        AndroidPlatform(ProcessStarter starter) throws Exception {
+            this.starter = starter;
             Object binder = call(Class.forName("android.os.ServiceManager").getMethod("getService", String.class), null, "package");
             if (binder == null) throw new Pending("Android PackageManager is not ready; App installation will continue after boot");
             Class<?> looper = Class.forName("android.os.Looper");
@@ -229,26 +269,48 @@ public final class CompanionInstallation {
             return new Info(packageName, version == null ? "" : version, code, certificate, protocol, apkHash);
         }
         @Override public void install(Path apk, long bytes) throws Exception {
-            java.lang.Process process = new ProcessBuilder("/system/bin/pm", "install", "-r", "--user", "0", "-S", Long.toString(bytes), "-").start();
+            final java.lang.Process process = starter.start(new String[] {"/system/bin/pm", "install", "-r", "--user", "0", "-S", Long.toString(bytes), "-"});
             ExecutorService io = Executors.newFixedThreadPool(3);
             try {
-                Future<String> output = io.submit(() -> read(process.getInputStream()));
-                Future<String> errors = io.submit(() -> read(process.getErrorStream()));
-                Future<?> input = io.submit(() -> {
-                    try (InputStream source = Files.newInputStream(apk, LinkOption.NOFOLLOW_LINKS); OutputStream target = process.getOutputStream()) {
-                        byte[] buffer = new byte[65536]; for (int count; (count = source.read(buffer)) >= 0;) if (count > 0) target.write(buffer, 0, count);
-                    } catch (IOException error) { throw new UncheckedIOException(error); }
+                Future<String> output = io.submit(new Callable<String>() {
+                    @Override public String call() throws IOException { return read(process.getInputStream()); }
                 });
-                input.get(120, TimeUnit.SECONDS);
+                Future<String> errors = io.submit(new Callable<String>() {
+                    @Override public String call() throws IOException { return read(process.getErrorStream()); }
+                });
+                Future<Void> input = io.submit(new Callable<Void>() {
+                    @Override public Void call() throws IOException {
+                        try (InputStream source = Files.newInputStream(apk, LinkOption.NOFOLLOW_LINKS); OutputStream target = process.getOutputStream()) {
+                            byte[] buffer = new byte[65536]; for (int count; (count = source.read(buffer)) >= 0;) if (count > 0) target.write(buffer, 0, count);
+                        }
+                        return null;
+                    }
+                });
+                Throwable inputFailure = null;
+                try { input.get(120, TimeUnit.SECONDS); }
+                catch (ExecutionException failedInput) { inputFailure = failedInput.getCause(); }
                 if (!process.waitFor(30, TimeUnit.SECONDS)) throw new Pending("Android App installation timed out; it will be retried after boot");
-                String text = output.get(5, TimeUnit.SECONDS); errors.get(5, TimeUnit.SECONDS);
-                if (process.exitValue() != 0 || !text.contains("Success")) throw new IOException("Android PackageManager did not accept the App; the existing App was kept");
+                String text = output.get(5, TimeUnit.SECONDS), errorText = errors.get(5, TimeUnit.SECONDS);
+                if (process.exitValue() != 0 || !text.contains("Success")) {
+                    java.util.regex.Matcher reason = java.util.regex.Pattern.compile("INSTALL_(?:FAILED|PARSE_FAILED)_[A-Z0-9_]+").matcher(text + "\n" + errorText);
+                    String code = reason.find() ? reason.group() : "exit=" + process.exitValue();
+                    savePrivateDiagnostic(apk.getParent().getParent(), "package-install", null, text, errorText);
+                    throw new IOException("Android PackageManager did not accept the App (" + code + "); the existing App was kept");
+                }
+                if (inputFailure != null) {
+                    savePrivateDiagnostic(apk.getParent().getParent(), "package-install", inputFailure, text, errorText);
+                    throw new IOException("The App APK stream did not finish", inputFailure);
+                }
             } catch (TimeoutException timeout) { throw new Pending("Android App installation is waiting for PackageManager"); }
             finally { process.destroyForcibly(); io.shutdownNow(); }
         }
         private static String read(InputStream input) throws IOException {
             try (InputStream source = input) { ByteArrayOutputStream out = new ByteArrayOutputStream(); byte[] buffer = new byte[4096];
-                for (int count; (count = source.read(buffer)) >= 0;) { if (out.size() + count > 16384) throw new IOException("PackageManager output is too large"); out.write(buffer, 0, count); }
+                for (int count; (count = source.read(buffer)) >= 0;) {
+                    int kept = Math.min(count, 16384 - out.size());
+                    if (kept > 0) out.write(buffer, 0, kept);
+                    // Drain the rest so stderr cannot block PM while only a bounded prefix is kept.
+                }
                 return new String(out.toByteArray(), StandardCharsets.UTF_8);
             }
         }

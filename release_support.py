@@ -111,6 +111,85 @@ def validate_dex(data):
         raise ValueError("DEX signature mismatch")
 
 
+def validate_backend_dex(data):
+    """The SDK-free root backend must not depend on JVM bootstrap facilities."""
+    validate_dex(data)
+    if data[4:7] not in {b"035", b"037", b"038", b"039", b"040"} or data[7] != 0:
+        raise ValueError("Unsupported backend DEX version")
+    if struct.unpack_from("<II", data, 36) != (112, 0x12345678):
+        raise ValueError("Invalid backend DEX header or byte order")
+    data_size, data_offset = struct.unpack_from("<II", data, 104)
+    if data_offset < 112 or data_offset > len(data) or data_size != len(data) - data_offset:
+        raise ValueError("Invalid backend DEX data bounds")
+    map_offset = struct.unpack_from("<I", data, 52)[0]
+    if map_offset < data_offset or map_offset % 4 or map_offset > len(data) - 4:
+        raise ValueError("Invalid backend DEX map offset")
+    map_count = struct.unpack_from("<I", data, map_offset)[0]
+    if not map_count or map_count > (len(data) - map_offset - 4) // 12:
+        raise ValueError("Invalid backend DEX map bounds")
+    fixed = {0: 112, 1: 4, 2: 4, 3: 12, 4: 8, 5: 8, 6: 32, 7: 4, 8: 8}
+    allowed = set(fixed) | {0x1000, 0x1001, 0x1002, 0x1003, 0x2000, 0x2001, 0x2002,
+                            0x2003, 0x2004, 0x2005, 0x2006, 0xF000}
+    entries, previous = {}, -1
+    for index in range(map_count):
+        kind, unused, count, offset = struct.unpack_from("<HHII", data, map_offset + 4 + index * 12)
+        if kind not in allowed or unused or kind in entries or not count or offset <= previous or offset >= len(data):
+            raise ValueError("Invalid backend DEX map entry")
+        if kind in fixed and (offset % 4 or count > (len(data) - offset) // fixed[kind]):
+            raise ValueError("Invalid backend DEX fixed table bounds")
+        entries[kind] = (count, offset); previous = offset
+    if entries.get(0) != (1, 0) or entries.get(0x1000) != (1, map_offset):
+        raise ValueError("Backend DEX header/map declaration is inconsistent")
+    for kind, header in ((1, 56), (2, 64), (3, 72), (4, 80), (5, 88), (6, 96)):
+        count, offset = struct.unpack_from("<II", data, header)
+        if count == 0:
+            if offset or kind in entries: raise ValueError("Inconsistent empty backend DEX table")
+        elif entries.get(kind) != (count, offset):
+            raise ValueError("Backend DEX table/map declaration is inconsistent")
+    if 7 in entries or 8 in entries:
+        raise ValueError("Backend DEX contains unsupported call-site/method-handle bootstrap tables")
+    string_count, strings_offset = struct.unpack_from("<II", data, 56)
+    type_count, types_offset = struct.unpack_from("<II", data, 64)
+    if entries.get(0x2002, (0, 0))[0] != string_count:
+        raise ValueError("Backend DEX string-data count is inconsistent")
+    strings, string_lengths = [], []
+    for index in range(string_count):
+        position = struct.unpack_from("<I", data, strings_offset + index * 4)[0]
+        if not data_offset <= position < len(data): raise ValueError("Invalid backend DEX string reference")
+        declared_length = 0
+        for byte_index in range(5):
+            if position >= len(data): raise ValueError("Truncated backend DEX string length")
+            value = data[position]; position += 1
+            if byte_index == 4 and value & 0xF0: raise ValueError("Invalid backend DEX string length")
+            declared_length |= (value & 0x7F) << (byte_index * 7)
+            if not value & 0x80: break
+        else: raise ValueError("Invalid backend DEX string length")
+        end = data.find(b"\x00", position)
+        if end < 0: raise ValueError("Unterminated backend DEX string")
+        strings.append(data[position:end])
+        string_lengths.append(declared_length)
+    previous_index = -1
+    forbidden = {b"Ljava/lang/invoke/LambdaMetafactory;", b"Ljava/lang/invoke/StringConcatFactory;"}
+    for index in range(type_count):
+        string_index = struct.unpack_from("<I", data, types_offset + index * 4)[0]
+        if string_index <= previous_index or string_index >= string_count:
+            raise ValueError("Invalid backend DEX type reference")
+        descriptor = strings[string_index]; previous_index = string_index
+        text = descriptor.decode("utf-8", errors="surrogatepass")
+        if len(text.encode("utf-16le", errors="surrogatepass")) // 2 != string_lengths[string_index]:
+            raise ValueError("Invalid backend DEX type string length")
+        if descriptor in forbidden: raise ValueError("Backend DEX depends on a JVM-only bootstrap factory")
+        base = descriptor.lstrip(b"[")
+        primitive = base in {b"V", b"Z", b"B", b"S", b"C", b"I", b"J", b"F", b"D"}
+        reference = base.startswith(b"L") and base.endswith(b";") and len(base) > 2
+        if descriptor.startswith(b"[") and base == b"V": primitive = False
+        if reference:
+            name = base[1:-1]
+            reference = not (name.startswith(b"/") or name.endswith(b"/") or b"//" in name
+                             or any(byte in name for byte in (b".", b";", b"[", b" ", b"\n", b"\r")))
+        if not primitive and not reference: raise ValueError("Invalid backend DEX type descriptor")
+
+
 def build_tools(root, manifest):
     version = manifest.get("androidBuildTools")
     if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):

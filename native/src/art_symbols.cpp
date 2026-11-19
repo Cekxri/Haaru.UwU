@@ -319,7 +319,7 @@ bool ArtSymbols::initialize() {
     } catch (const std::exception& failure) {
         error_ = std::string("ART symbol resolver failed: ") + failure.what();
     } catch (...) {
-        // Initialization fails closed; never publish a partially parsed index.
+        // Initialisation fails closed; never publish a partially parsed index.
         error_ = "Unknown ART symbol resolver failure";
     }
     return false;

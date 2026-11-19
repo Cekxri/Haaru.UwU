@@ -32,7 +32,6 @@ PAYLOAD = {
     "bin/haaru.dex": b"new helper fixture payload\n",
     "bin/hook.dex": b"new hook fixture payload\n",
     "bin/haaru-upgrade": b"new Rust migrator fixture payload\n",
-    "webroot/index.html": b"<main>new WebUI fixture payload</main>\n",
 }
 READER = None
 
@@ -156,7 +155,7 @@ def migrate(args, live, stage, expected_success=True):
         for field in ("ok", "verified", "settingsPreserved", "appearancePreserved", "disabledPreserved", "rebootRequired"):
             assert result.get(field) == java_result.get(field), (field, result, java_result)
         if expected_success:
-            for relative in ("data/state.properties", "webroot/appearance.json", "disable"):
+            for relative in ("data/state.properties", "data/appearance.json", "disable"):
                 rust_file, java_file = stage / relative, oracle / relative
                 assert rust_file.exists() is java_file.exists(), relative
                 if not rust_file.exists():
@@ -214,11 +213,12 @@ def assert_durable(stage, country="us", carrier="AT&T", palette="MINT", disabled
             assert state.get(key) == value, (key, state.get(key), value)
     assert not any(key.startswith(("baseline.", "pending.", "last.")) for key in state)
     assert "targetPackages" not in state
-    assert json.loads((stage / "webroot/appearance.json").read_text(encoding="utf-8")) == json.loads(appearance(palette))
+    assert json.loads((stage / "data/appearance.json").read_text(encoding="utf-8")) == json.loads(appearance(palette))
+    assert not (stage / "webroot").exists(), "Native-only migration created Webroot"
     assert (stage / "disable").exists() is disabled
     for name in BOOT_FILES:
         assert not (stage / name).exists(), "Old boot state was copied: " + name
-    expected_files = set(PAYLOAD) | {"data/state.properties", "webroot/appearance.json"}
+    expected_files = set(PAYLOAD) | {"data/state.properties", "data/appearance.json"}
     if disabled:
         expected_files.add("disable")
     assert set(tree(stage)) == expected_files, set(tree(stage)) - expected_files
@@ -376,7 +376,7 @@ def main():
         reboot_swap(live, stage)
         assert tree(live) == {**PAYLOAD, "disable": b""}
         assert not (live / "data/state.properties").exists()
-        assert not (live / "webroot/appearance.json").exists()
+        assert not (live / "data/appearance.json").exists()
 
     run_case("settings survive boot swap and uninstall removes only this module", ordinary)
     run_case("staged disable survives the official installer's live flag clearing", disabled)

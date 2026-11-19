@@ -30,8 +30,9 @@ for p in module.rglob("*.sh"):
     text = p.read_text(encoding="utf-8")
     assert not re.search(r"\b(setprop|resetprop|mount)\b", text), p
     assert "/data/adb/service.d" not in text and "/data/adb/post-fs-data.d" not in text
-bridge = (module / "webroot/bridge.js").read_text(encoding="utf-8")
-assert not re.search(r"localStorage\s*\.", bridge)
+bridge = (ROOT / "companion/src/main/kotlin/dev/cekxri/haaru/ModuleBridge.kt").read_text(encoding="utf-8")
+assert "LocalSocket" in bridge and "SharedPreferences" not in bridge
+assert not (module / "webroot").exists()
 native = (ROOT / "native/src/module.cpp").read_text(encoding="utf-8")
 policy = (ROOT / "native/src/policy.hpp").read_text(encoding="utf-8")
 assert 'haaru_uid_allowed(uid)' in policy
@@ -53,7 +54,7 @@ with tempfile.TemporaryDirectory(dir=work) as name:
     directory = Path(name).resolve()
     target = directory / "modules/haaru"
     assert target.resolve().is_relative_to(work)
-    settings = ("data/state.properties", "data/runtime.json", "webroot/appearance.json",
+    settings = ("data/state.properties", "data/runtime.json", "data/appearance.json",
                 "data/global-status.json", "data/global-shadow.json", "data/global-transaction.json", "data/card-meta.lock", "data/card-observer.lock", "bin/haaru.dex", "bin/hook.dex", "bin/haaru-status-arm64-v8a", "zygisk/arm64-v8a.so", "update")
     for item in settings:
         p = target / item

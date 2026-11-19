@@ -261,7 +261,7 @@ public final class HooksTest {
         equal("original-slot:0", invoke(slot, 0), "reload removes old first slot");
         equal("original-slot:1", invoke(slot, 1), "reload removes old second slot");
         equal("de", invoke(id, 33, "caller"), "reload installs only the new profile");
-        equal("de", invoke(slot, 2), "reload installs new slot and normalizes ISO case");
+        equal("de", invoke(slot, 2), "reload installs new slot and normalises ISO case");
         Hooks.configure(new int[0], new int[0], new String[0], new String[0]);
         equal("static-country:33:caller", invoke(id, 33, "caller"), "empty configure disables all subscription overrides");
         equal("original-slot:2", invoke(slot, 2), "empty configure disables all slot overrides");

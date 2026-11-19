@@ -42,7 +42,11 @@ public final class Upgrade {
     private static Map<String, Object> snapshot(Path source, Path destination, CommitObserver observer) throws Exception {
         refuseRemoval(source);
         byte[] stateBytes = optional(source.resolve("data/state.properties"), 65536);
-        byte[] appearanceBytes = optional(source.resolve("webroot/appearance.json"), 2048);
+        byte[] appearanceBytes = optional(source.resolve("data/appearance.json"), 2048);
+        byte[] legacyAppearance = optional(source.resolve("webroot/appearance.json"), 2048);
+        if (appearanceBytes != null && legacyAppearance != null && !Arrays.equals(appearanceBytes, legacyAppearance))
+            throw new IOException("Conflicting appearance files; settings were not changed");
+        if (appearanceBytes == null) appearanceBytes = legacyAppearance;
         if (stateBytes != null) stateBytes = validatedState(stateBytes);
         if (appearanceBytes != null) {
             String text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
@@ -56,7 +60,7 @@ public final class Upgrade {
 
         Map<Path, byte[]> changes = new LinkedHashMap<Path, byte[]>();
         changes.put(destination.resolve("data/state.properties"), stateBytes);
-        changes.put(destination.resolve("webroot/appearance.json"), appearanceBytes);
+        changes.put(destination.resolve("data/appearance.json"), appearanceBytes);
         changes.put(destination.resolve("disable"), preserveDisabled ? new byte[0] : null);
         Map<Path, byte[]> backups = new LinkedHashMap<Path, byte[]>();
         // Validate every destination and preserve prior staged settings before the first write.

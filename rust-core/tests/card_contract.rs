@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Public card status is derived from a complete, current engine acknowledgment.
+//! Public card status is derived from a complete, current engine acknowledgement.
 use haaru_core::card::{classify, description, CardState, Lifecycle, Snapshot};
 use haaru_core::model::fnv1a64;
 use serde_json::{json, Value};
@@ -278,7 +278,7 @@ fn hash_confirmation_uses_the_original_runtime_bytes() {
     let pretty = serde_json::to_vec_pretty(&runtime()).unwrap();
     assert_ne!(fnv1a64(fixture.runtime.as_ref().unwrap()), fnv1a64(&pretty));
     fixture.runtime = Some(pretty);
-    assert_eq!(fixture.state(), CardState::Waiting, "An equivalent reserialized object is a different exact-byte configuration");
+    assert_eq!(fixture.state(), CardState::Waiting, "An equivalent reserialised object is a different exact-byte configuration");
     fixture.ack = Some(serde_json::to_vec(&ack_for(fixture.runtime.as_ref().unwrap())).unwrap());
     assert_eq!(fixture.state(), CardState::Running);
 }

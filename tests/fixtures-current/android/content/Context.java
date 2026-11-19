@@ -17,5 +17,6 @@ public class Context {
         phoneServiceReads++;
         return phoneServiceAvailable ? new TelephonyManager(this) : null;
     }
+    public android.content.pm.PackageManager getPackageManager() { return android.content.pm.PackageManager.INSTANCE; }
     public static void resetCounters() { applicationReads = 0; phoneServiceReads = 0; }
 }

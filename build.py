@@ -10,7 +10,7 @@ import subprocess
 import tomllib
 import urllib.request
 import zipfile
-from release_support import companion_install_properties, companion_properties, source_eligible, validate_companion
+from release_support import companion_install_properties, companion_properties, source_eligible, validate_backend_dex, validate_companion
 
 ROOT = Path(__file__).resolve().parent
 R8_VERSION = "8.6.27"
@@ -58,7 +58,7 @@ def validate_module_distribution(directory):
         relative = path.relative_to(directory)
         name = relative.as_posix()
         if path.suffix.lower() == ".apk":
-            raise ValueError("App APK is injected from the verified dist artifact; do not stage another APK: " + name)
+            raise ValueError("App APK is injected from the verified dist artefact; do not stage another APK: " + name)
         if relative.parts[0] == "data" or name == "webroot/appearance.json" or name in {"disable", "remove", "update"} \
                 or path.name == "lock" or path.name.endswith(".tmp"):
             raise ValueError("Mutable settings or lifecycle files cannot be packaged: " + name)
@@ -82,9 +82,8 @@ def main():
     install_metadata_path = ROOT / "module/app/install.prop"
     install_metadata_path.parent.mkdir(parents=True, exist_ok=True)
     install_metadata_path.write_bytes(install_metadata)
-    if any(path.suffix in {".wasm", ".woff2"} or path.name == "ui-build-manifest.json"
-           for path in (ROOT / "module/webroot").rglob("*")):
-        raise SystemExit("Remove historical staged WASM/font assets before packaging the native companion release")
+    if (ROOT / "module/webroot").exists():
+        raise SystemExit("Native-only releases must not include a KernelSU WebUI directory")
     native_manifest = json.loads((ROOT / "module/native-build-manifest.json").read_text(encoding="utf-8"))
     rust_manifest = json.loads((ROOT / "module/rust-build-manifest.json").read_text(encoding="utf-8"))
     if rust_manifest.get("buildMode") != "built-and-staged" or native_manifest.get("rustCoreSourceSha256") != rust_manifest.get("sourceTreeSha256"):
@@ -141,6 +140,8 @@ def main():
         run(["python", "tests/privacy_guard_test.py"])
         run(["python", "tests/sdk_setup_test.py"])
         run(["python", "tests/companion_lifecycle_test.py"])
+        run(["python", "tests/native_action_test.py"])
+        run(["python", "tests/backend_dex_contract_test.py"])
         fixtures = ROOT / "tests" / "fixtures-current"
         if fixtures.exists():
             adapter_classes = build / "adapter-tests"
@@ -150,6 +151,8 @@ def main():
                  "-d", adapter_classes, *adapter])
             run(["java", "-cp", "build/classes" + os.pathsep + "build/adapter-tests",
                  "com.github.haaru.ksu.AndroidBackendTest"])
+            run(["java", "-cp", "build/classes" + os.pathsep + "build/adapter-tests",
+                 "com.github.haaru.ksu.CompanionAndroidPlatformTest"])
             legacy_classes = build / "adapter-legacy"
             legacy_classes.mkdir()
             common = [p for p in fixtures.rglob("*.java") if p.name != "ICarrierConfigLoader.java"]
@@ -159,9 +162,6 @@ def main():
                  "-d", legacy_classes, *common, *legacy])
             run(["java", "-cp", "build/classes" + os.pathsep + "build/adapter-legacy",
                  "com.github.haaru.ksu.AndroidLegacyTest"])
-        run(["node", "--test", "tests/webui_test.mjs"])
-        run(["node", "--test", "tests/compose_bridge_test.mjs"])
-        run(["node", "--test", "tests/launcher_test.mjs"])
         run(["python", "tests/preset_parity_test.py"])
         hook_tests = build / "hook-tests"
         hook_tests.mkdir()
@@ -190,8 +190,7 @@ def main():
     run(["java", "-cp", r8, "com.android.tools.r8.D8", "--no-desugaring", "--min-api", "29",
          "--output", dex_dir, jar])
     dex = dex_dir / "classes.dex"
-    if not dex.read_bytes().startswith(b"dex\n"):
-        raise SystemExit("Invalid DEX output")
+    validate_backend_dex(dex.read_bytes())
     hook_classes = build / "hook-classes"
     hook_classes.mkdir()
     run(["javac", "--release", "8", "-encoding", "UTF-8", "-d", hook_classes,
@@ -204,8 +203,7 @@ def main():
     run(["java", "-cp", r8, "com.android.tools.r8.D8", "--no-desugaring", "--min-api", "29",
          "--output", hook_dex_dir, hook_jar])
     hook_dex = hook_dex_dir / "classes.dex"
-    if not hook_dex.read_bytes().startswith(b"dex\n"):
-        raise SystemExit("Invalid getter hook DEX")
+    validate_backend_dex(hook_dex.read_bytes())
     entries = []
     for p in (ROOT / "module").rglob("*"):
         if not p.is_file():
@@ -249,7 +247,7 @@ def main():
         "persistentTelephonyWrites": False, "volatileSystemProperties": ["gsm.sim.operator.iso-country", "gsm.sim.operator.alpha"],
         "settingsStorage": "module-directory", "nativeAbis": [a["abi"] for a in native_manifest["assets"]],
         "settingsPreservedOnUpgrade": True, "upgradeSnapshot": "installation-time",
-        "migratedFiles": ["data/state.properties", "webroot/appearance.json"],
+        "migratedFiles": ["data/state.properties", "data/appearance.json"],
         "rustCore": True, "rustVersion": rust_manifest["rustVersion"], "rustSourceSha256": rust_manifest["sourceTreeSha256"],
         "migrationEngine": "rust-native", "retainedUiLanguage": "Kotlin Compose Android",
         "dynamicDescription": True, "cardObserverIntervalMs": 2000,
@@ -260,7 +258,7 @@ def main():
         "signingCertificateSha256": companion_manifest["signingCertificateSha256"],
         "androidBuildTools": companion_manifest["androidBuildTools"],
         "uiStack": companion_manifest["libraries"], "companionArtifactVerified": companion_verified,
-        "webUi": "native-app-launcher-with-classic-fallback",
+        "webUi": False,
         "rootExecution": "ksu-module", "appRequestsSuperuser": False,
         "ipcTransport": "module-local-socket", "ipcProtocol": 1,
         "companionAuthentication": "peer-uid-package-and-apk-signer",

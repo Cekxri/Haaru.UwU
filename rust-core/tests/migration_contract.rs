@@ -24,7 +24,7 @@ impl Drop for Fixture {
     }
 }
 fn create_module(path: &Path) -> PathBuf {
-    fs::create_dir_all(path.join("webroot")).unwrap();
+    fs::create_dir_all(path).unwrap();
     fs::write(path.join("module.prop"), b"id=haaru\nname=Haaru\nauthor=Cekxri\nversion=0.6.0\nversionCode=8\n").unwrap(); path.to_owned()
 }
 fn sample() -> Properties {
@@ -48,7 +48,7 @@ fn snapshot(path: &Path) -> Vec<u8> { fs::read(path.join("data/state.properties"
 fn verified_predecessor_is_discovered_by_metadata_without_a_legacy_id_literal() {
     let fixture = Fixture::new();
     let predecessor = fixture.root.join("live/previous_module");
-    fs::create_dir_all(predecessor.join("webroot")).unwrap();
+    fs::create_dir_all(&predecessor).unwrap();
     fs::write(predecessor.join("module.prop"), b"id=previous_module\nname=Haaru\nauthor=Cekxri\nversion=0.6.1\n").unwrap();
     save(&predecessor, &sample()); let original = snapshot(&predecessor);
     let result = migrate(&predecessor, &fixture.destination).unwrap();
@@ -78,12 +78,56 @@ fn predecessor_identity_and_target_id_must_be_unambiguous() {
 }
 
 #[test]
+fn legacy_appearance_moves_into_data_without_webroot_or_source_mutation() {
+    let fixture = Fixture::new(); fs::create_dir(fixture.source.join("webroot")).unwrap();
+    let bytes = br#"{"palette":"BLUE","glass":true}"#;
+    fs::write(fixture.source.join("webroot/appearance.json"), bytes).unwrap();
+    let result = migrate(&fixture.source, &fixture.destination).unwrap();
+    assert_eq!(result["appearancePreserved"], true);
+    assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), bytes);
+    assert_eq!(fs::read(fixture.source.join("webroot/appearance.json")).unwrap(), bytes);
+    assert!(!fixture.source.join("data").exists());
+    assert!(!fixture.destination.join("webroot").exists());
+}
+
+#[test]
+fn duplicate_appearance_paths_must_agree_before_any_staged_changes() {
+    let fixture = Fixture::new(); save(&fixture.source, &sample()); save(&fixture.destination, &sample());
+    fs::create_dir(fixture.source.join("webroot")).unwrap();
+    let bytes = br#"{"glass":true}"#;
+    fs::write(fixture.source.join("data/appearance.json"), bytes).unwrap();
+    fs::write(fixture.source.join("webroot/appearance.json"), bytes).unwrap();
+    migrate(&fixture.source, &fixture.destination).unwrap();
+    assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), bytes);
+    let state = snapshot(&fixture.destination);
+    fs::write(fixture.source.join("webroot/appearance.json"), br#"{"glass":false}"#).unwrap();
+    assert!(migrate(&fixture.source, &fixture.destination).is_err());
+    assert_eq!(snapshot(&fixture.destination), state);
+    assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), bytes);
+}
+
+#[test]
+fn native_monet_and_all_manual_palettes_migrate_without_changing_older_defaults() {
+    let fixture = Fixture::new(); fs::create_dir(fixture.source.join("data")).unwrap();
+    for palette in ["VIOLET", "LAVENDER", "WISTERIA", "IRIS", "PLUM", "LILAC", "ORCHID", "MAUVE", "PERIWINKLE", "MINT", "BLUE", "ROSE", "SAGE", "CAFE", "SLATE"] {
+        let bytes = format!("{{\"palette\":\"{palette}\",\"dynamicColour\":true,\"customColour\":\"#a1b2c3\"}}").into_bytes();
+        fs::write(fixture.source.join("data/appearance.json"), &bytes).unwrap();
+        migrate(&fixture.source, &fixture.destination).unwrap();
+        assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), bytes);
+    }
+    for bytes in [br#"{"dynamicColour":1}"#.as_slice(), br##"{"customColour":"#12345"}"##.as_slice(), br##"{"customColour":"#12345z"}"##.as_slice(), br#"{"customColour":"red"}"#.as_slice()] {
+        fs::write(fixture.source.join("data/appearance.json"), bytes).unwrap();
+        assert!(migrate(&fixture.source, &fixture.destination).is_err());
+    }
+}
+
+#[test]
 fn preserves_settings_and_excludes_all_transient_boot_data() {
     let fixture = Fixture::new(); let mut original = sample();
     for key in ["targetPackages", "baseline.0.country", "pending.0.country", "last.0.country", "unrecognized"] { original.insert(key.into(), "obsolete".into()); }
     save(&fixture.source, &original); let before = snapshot(&fixture.source);
     let appearance = br#"{"style":"MATERIAL3","appearance":"DARK","palette":"MINT","glass":true,"reduceMotion":false}"#;
-    fs::write(fixture.source.join("webroot/appearance.json"), appearance).unwrap();
+    fs::write(fixture.source.join("data/appearance.json"), appearance).unwrap();
     for name in ["runtime.json", "global-status.json", "global-shadow.json", "global-transaction.json", "leftover.tmp"] {
         fs::write(fixture.source.join("data").join(name), b"old-process-data").unwrap();
     }
@@ -91,7 +135,8 @@ fn preserves_settings_and_excludes_all_transient_boot_data() {
     let result = migrate(&fixture.source, &fixture.destination).unwrap();
     assert_eq!(result["verified"], true); assert_eq!(result["settingsPreserved"], true); assert_eq!(result["appearancePreserved"], true);
     assert_eq!(result["rebootRequired"], true); assert_eq!(load(&fixture.destination), sample());
-    assert_eq!(snapshot(&fixture.source), before); assert_eq!(fs::read(fixture.destination.join("webroot/appearance.json")).unwrap(), appearance);
+    assert_eq!(snapshot(&fixture.source), before); assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), appearance);
+    assert!(!fixture.destination.join("webroot").exists());
     assert_eq!(fs::read(fixture.destination.join("module.prop")).unwrap(), metadata);
     for name in ["runtime.json", "global-status.json", "global-shadow.json", "global-transaction.json", "lock", "leftover.tmp"] {
         assert!(!fixture.destination.join("data").join(name).exists());
@@ -131,32 +176,32 @@ fn rejects_appearance_duplicates_utf8_and_oversize_before_committing_state() {
     let bad = vec![br#"{"style":"other"}"#.to_vec(), br#"{"glass":true,"glass":false}"#.to_vec(), br#"{"glass":true,"\u0067lass":false}"#.to_vec(),
         vec![0xc0, 0xaf], vec![b' '; 2049]];
     for appearance in bad {
-        fs::write(fixture.source.join("webroot/appearance.json"), appearance).unwrap(); assert!(migrate(&fixture.source, &fixture.destination).is_err()); assert_eq!(snapshot(&fixture.destination), before);
+        fs::write(fixture.source.join("data/appearance.json"), appearance).unwrap(); assert!(migrate(&fixture.source, &fixture.destination).is_err()); assert_eq!(snapshot(&fixture.destination), before);
     }
-    fs::remove_file(fixture.source.join("webroot/appearance.json")).unwrap(); fs::create_dir(fixture.destination.join("webroot/appearance.json")).unwrap();
+    fs::remove_file(fixture.source.join("data/appearance.json")).unwrap(); fs::create_dir(fixture.destination.join("data/appearance.json")).unwrap();
     assert!(migrate(&fixture.source, &fixture.destination).is_err()); assert_eq!(snapshot(&fixture.destination), before);
 }
 
 #[test]
 fn rolls_back_every_actual_interrupted_commit_including_absence() {
     let fixture = Fixture::new(); let mut newer = sample(); newer.insert("profile.0.country".into(), "jp".into()); save(&fixture.source, &newer); save(&fixture.destination, &sample());
-    fs::write(fixture.source.join("webroot/appearance.json"), br#"{"style":"MATERIAL3"}"#).unwrap();
-    fs::write(fixture.destination.join("webroot/appearance.json"), br#"{"style":"MIUIX"}"#).unwrap();
+    fs::write(fixture.source.join("data/appearance.json"), br#"{"style":"MATERIAL3"}"#).unwrap();
+    fs::write(fixture.destination.join("data/appearance.json"), br#"{"style":"MIUIX"}"#).unwrap();
     fs::write(fixture.source.join("disable"), b"").unwrap();
-    let original = snapshot(&fixture.source); let before = snapshot(&fixture.destination); let appearance = fs::read(fixture.destination.join("webroot/appearance.json")).unwrap();
+    let original = snapshot(&fixture.source); let before = snapshot(&fixture.destination); let appearance = fs::read(fixture.destination.join("data/appearance.json")).unwrap();
     for name in ["state.properties", "appearance.json", "disable"] {
         assert!(migrate_with_observer(&fixture.source, &fixture.destination, &mut |target| {
             if target.file_name().unwrap() == name { Err("Injected post-commit interruption".into()) } else { Ok(()) }
         }).is_err());
-        assert_eq!(snapshot(&fixture.destination), before); assert_eq!(fs::read(fixture.destination.join("webroot/appearance.json")).unwrap(), appearance);
+        assert_eq!(snapshot(&fixture.destination), before); assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), appearance);
         assert_eq!(snapshot(&fixture.source), original); assert!(!fixture.destination.join("disable").exists());
     }
     // A source without appearance removes the old staged file; a later failure must restore it.
-    fs::remove_file(fixture.source.join("webroot/appearance.json")).unwrap();
+    fs::remove_file(fixture.source.join("data/appearance.json")).unwrap();
     assert!(migrate_with_observer(&fixture.source, &fixture.destination, &mut |target| {
         if target.file_name().unwrap() == "disable" { Err("Injected failure after unlink".into()) } else { Ok(()) }
     }).is_err());
-    assert_eq!(snapshot(&fixture.destination), before); assert_eq!(fs::read(fixture.destination.join("webroot/appearance.json")).unwrap(), appearance);
+    assert_eq!(snapshot(&fixture.destination), before); assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), appearance);
 }
 
 #[test]
@@ -174,7 +219,8 @@ fn legacy_flags_and_appearance_only_preserve_known_contract() {
     values.remove("profile.0.enabled"); values.remove("profile.1.subId"); save(&fixture.source, &values); migrate(&fixture.source, &fixture.destination).unwrap();
     let loaded = load(&fixture.destination); assert_eq!(loaded["schema"], "5"); assert_eq!(loaded["profile.0.enabled"], "true"); assert_eq!(loaded["profile.1.enabled"], "false");
     values.remove("schema"); save(&fixture.source, &values); migrate(&fixture.source, &fixture.destination).unwrap(); assert_eq!(load(&fixture.destination)["schema"], "5");
-    let prefs_source = create_module(&fixture.root.join("prefs/haaru")); fs::write(prefs_source.join("webroot/appearance.json"), b"{}").unwrap();
+    let prefs_source = create_module(&fixture.root.join("prefs/haaru")); fs::create_dir(prefs_source.join("webroot")).unwrap();
+    fs::write(prefs_source.join("webroot/appearance.json"), b"{}").unwrap();
     let result = migrate(&prefs_source, &fixture.destination).unwrap(); assert_eq!(result["appearancePreserved"], true); assert_eq!(result["settingsPreserved"], false);
     assert!(!prefs_source.join("data").exists()); assert!(!fixture.destination.join("data/state.properties").exists());
 }

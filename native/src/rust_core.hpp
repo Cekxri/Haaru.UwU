@@ -27,7 +27,7 @@ inline std::string rustResult(int32_t length, const std::vector<uint8_t>& bytes)
     if (length < 0 || static_cast<size_t>(length) > bytes.size()) throw std::invalid_argument("Rust core rejected invalid or oversized input");
     return std::string(reinterpret_cast<const char*>(bytes.data()), static_cast<size_t>(length));
 }
-// JSON serialization can reject malformed Java-derived UTF-8. Never let that
+// JSON serialisation can reject malformed Java-derived UTF-8. Never let that
 // exception escape a JNI callback before the Rust validator can reject input.
 inline bool rustValidRuntime(const nlohmann::json& value, const std::string& boot) noexcept {
     try {

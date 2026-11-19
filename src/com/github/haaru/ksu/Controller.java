@@ -42,7 +42,7 @@ public final class Controller {
         if (!Files.isDirectory(module, LinkOption.NOFOLLOW_LINKS)) throw new IOException("Module directory is absent");
         safePath(dir);
         readLifecycle(); readModuleVersion(); checkMutableOperation(op);
-        // Preferences use one atomic file; no data directory, state or Binder access.
+        // Preferences use one atomic file, without state or Binder access.
         if ("prefs".equals(op) || "saveprefs".equals(op)) return preferences(op, args);
         if (readOnly && !Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
             load();
@@ -275,13 +275,33 @@ public final class Controller {
     }
 
     private Map<String, Object> preferences(String op, String[] args) throws Exception {
-        Path path = safePath(module.resolve("webroot").resolve("appearance.json")); Object appearance;
+        Path path = safePath(dir.resolve("appearance.json"));
+        Path legacy = safePath(module.resolve("webroot/appearance.json"));
+        byte[] current = Files.exists(path, LinkOption.NOFOLLOW_LINKS) ? readLimited(path, 2048) : null;
+        byte[] previous = Files.exists(legacy, LinkOption.NOFOLLOW_LINKS) ? readLimited(legacy, 2048) : null;
+        if (current != null && previous != null && !Arrays.equals(current, previous))
+            throw new IOException("Conflicting appearance files; settings were not changed");
+        byte[] selected = current != null ? current : previous;
+        Object appearance = selected == null ? null : validateAppearance(Json.decode(decodeAppearance(selected)));
         if ("saveprefs".equals(op)) {
             appearance = validateAppearance(Json.decode(decodeHex(args[1], 2048)));
             safePath(path.getParent()); Files.createDirectories(path.getParent());
-            atomicWrite(path, Json.encode(appearance).getBytes(StandardCharsets.UTF_8));
-        } else appearance = Files.exists(path, LinkOption.NOFOLLOW_LINKS)
-                ? validateAppearance(Json.decode(new String(readLimited(path, 2048), StandardCharsets.UTF_8))) : null;
+            byte[] saved = Json.encode(appearance).getBytes(StandardCharsets.UTF_8);
+            atomicWrite(path, saved);
+            try {
+                if (!Arrays.equals(saved, readLimited(path, 2048))) throw new IOException("Appearance save was not verified");
+                if (previous != null) {
+                    if (!Arrays.equals(previous, readLimited(legacy, 2048))) throw new IOException("Legacy appearance changed during migration");
+                    Files.delete(legacy);
+                }
+            } catch (Exception failure) {
+                // Retire the old file only after a verified save; preserve the prior choice on failure.
+                if (Arrays.equals(saved, readLimited(path, 2048))) {
+                    if (current == null) Files.deleteIfExists(path); else atomicWrite(path, current);
+                }
+                throw failure;
+            }
+        }
         Map<String, Object> out = base(true, "saveprefs".equals(op));
         out.put("appearance", appearance); out.put("readOnly", readOnly);
         if ("saveprefs".equals(op)) out.put("verification", "module-files"); return out;
@@ -293,11 +313,23 @@ public final class Controller {
             String key = String.valueOf(entry.getKey()); Object value = entry.getValue(); boolean valid;
             if ("style".equals(key)) valid = Arrays.asList("MIUIX", "MATERIAL3").contains(value);
             else if ("appearance".equals(key)) valid = Arrays.asList("SYSTEM", "LIGHT", "DARK").contains(value);
-            else if ("palette".equals(key)) valid = Arrays.asList("MINT", "BLUE", "VIOLET", "ROSE").contains(value);
-            else if ("glass".equals(key) || "reduceMotion".equals(key)) valid = value instanceof Boolean;
+            else if ("palette".equals(key)) valid = Arrays.asList("VIOLET", "LAVENDER", "WISTERIA", "IRIS", "PLUM", "LILAC", "ORCHID", "MAUVE", "PERIWINKLE", "MINT", "BLUE", "ROSE", "SAGE", "CAFE", "SLATE").contains(value);
+            else if ("glass".equals(key) || "reduceMotion".equals(key) || "dynamicColour".equals(key)) valid = value instanceof Boolean;
+            else if ("customColour".equals(key)) valid = value instanceof String && ((String) value).matches("|#[0-9A-Fa-f]{6}");
             else valid = false;
             if (!valid) throw new IllegalArgumentException("Unknown or invalid appearance field: " + key);
-        } return appearance;
+        }
+        Map<String, Object> canonical = new LinkedHashMap<String, Object>();
+        for (Map.Entry<?, ?> entry : appearance.entrySet()) {
+            Object value = entry.getValue();
+            if ("customColour".equals(entry.getKey())) value = ((String) value).toUpperCase(Locale.ROOT);
+            canonical.put((String) entry.getKey(), value);
+        }
+        return canonical;
+    }
+    private static String decodeAppearance(byte[] bytes) throws IOException {
+        return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
     }
 
     /** A malformed/stale engine ACK is a local status issue, never a controller failure. */
@@ -350,7 +382,7 @@ public final class Controller {
                 ackFailure(out, "Global engine has not acknowledged the current module configuration");
             } else if (applied && (!ok || !initialized || !runtimeFieldsSupported(countrySupport, nameSupport))) {
                 out.put("ok", false); out.put("applied", false);
-                ackFailure(out, "Global application is not confirmed by an initialized service engine");
+                ackFailure(out, "Global application is not confirmed by an initialised service engine");
             }
         } catch (Exception e) {
             String error = "Global engine ACK unavailable: " + message(e);

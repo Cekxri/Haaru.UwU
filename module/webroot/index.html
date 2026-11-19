@@ -1,7 +1,0 @@
-<!doctype html>
-<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light dark"><title>Haaru</title>
-<style>:root{color-scheme:light dark;font:16px system-ui;color:light-dark(#282321,#eee5dd);background:light-dark(#faf7f2,#1c1917)}body{max-width:440px;margin:auto;padding:64px 24px;line-height:1.7}h1{font-size:40px;margin-bottom:8px}p{opacity:.8}button,a{font:inherit;border:0;border-radius:24px;padding:14px 24px;background:light-dark(#e3ded0,#39352d);color:inherit;display:inline-block;text-decoration:none}small{display:block;margin-top:32px;opacity:.6}</style></head>
-<body><h1>Haaru</h1><p>城堡之下的SIM國度.咖啡廳☕</p><p>地區與外觀設定已移至 Haaru App。請安裝同版本 APK，App 會透過模組連線，不需另外授權 Root。</p><button id="open">開啟 Haaru</button><p id="result" role="status"></p><small><a href="classic/index.html">相容介面</a></small>
-<script>
-document.getElementById('open').onclick=function(){if(!window.ksu||typeof window.ksu.exec!=='function'){document.getElementById('result').textContent='請從桌面開啟 Haaru App。';return;}const key='haaruOpen'+Date.now();window[key]=function(){delete window[key];document.getElementById('result').textContent='若 App 未開啟，請先安裝 Haaru APK。';};window.ksu.exec('am start --user 0 -n dev.cekxri.haaru/.MainActivity', '{}', key);};
-</script></body></html>

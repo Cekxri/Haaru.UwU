@@ -1,5 +1,6 @@
 package dev.cekxri.haaru
 
+import android.os.Build
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -46,6 +47,7 @@ fun HaaruApp(bridge: UiBridge) {
     var page by rememberSaveable { mutableIntStateOf(0) }
     var selectedSlot by rememberSaveable { mutableIntStateOf(0) }
     var picker by remember { mutableStateOf<Picker?>(null) }
+    var colourPicker by remember { mutableStateOf(false) }
     var confirmation by remember { mutableStateOf<Confirmation?>(null) }
     var preferenceNotice by remember { mutableStateOf("") }
     val dark = when (preferences.appearance) {
@@ -54,12 +56,7 @@ fun HaaruApp(bridge: UiBridge) {
         Appearance.LIGHT -> false
     }
     val reduced = preferences.reduceMotion || bridge.systemReducedMotion
-    val seed = when (preferences.palette) {
-        Palette.MINT -> Color(0xFF527A69)
-        Palette.BLUE -> Color(0xFF64798D)
-        Palette.VIOLET -> Color(0xFF81708E)
-        Palette.ROSE -> Color(0xFFAA727C)
-    }
+    val seed = manualSeed(preferences)
     fun update(value: UiPreferences) {
         if (state.snapshot.readOnly || state.snapshot.upgradePending) {
             preferenceNotice = "請先啟用模組並完成重新啟動。"; return
@@ -80,7 +77,7 @@ fun HaaruApp(bridge: UiBridge) {
     LaunchedEffect(state.snapshot.cards) {
         if (state.snapshot.cards.none { it.slot == selectedSlot }) selectedSlot = state.snapshot.cards.firstOrNull()?.slot ?: 0
     }
-    DualTheme(preferences.style, dark, seed, FontFamily.Default) {
+    DualTheme(preferences.style, dark, seed, FontFamily.Default, dynamicColour = preferences.dynamicColour) {
         CompositionLocalProvider(LocalHaaruReducedMotion provides reduced) {
         val colors = MaterialTheme.colorScheme
         val backdrop = rememberLayerBackdrop()
@@ -181,8 +178,14 @@ fun HaaruApp(bridge: UiBridge) {
                                         SelectionRow("明暗", appearanceName(preferences.appearance), HaaruIcons.Cup) {
                                             picker = Picker("明暗", Appearance.entries.map { it.name to appearanceName(it) }, preferences.appearance.name) { update(preferences.copy(appearance = Appearance.valueOf(it))) }
                                         }
-                                        SelectionRow("色調", paletteName(preferences.palette), HaaruIcons.Globe) {
-                                            picker = Picker("色調", Palette.entries.map { it.name to paletteName(it) }, preferences.palette.name) { update(preferences.copy(palette = Palette.valueOf(it))) }
+                                        SettingSwitch(preferences.style, "Google Monet 動態色彩",
+                                            if (LocalDynamicColourActive.current) "跟隨系統桌布的色彩"
+                                                else if (!preferences.dynamicColour) "已關閉；可以選擇手動色彩"
+                                                else "此系統未提供動態色彩；目前使用手動色彩",
+                                            preferences.dynamicColour) { update(preferences.copy(dynamicColour = it)) }
+                                        SelectionRow("手動色彩", if (preferences.customColour.isNotEmpty()) "自訂色彩" else paletteName(preferences.palette),
+                                            HaaruIcons.Globe, enabled = !preferences.dynamicColour) {
+                                            colourPicker = true
                                         }
                                         HorizontalDivider(color = colors.outlineVariant.copy(alpha = .4f))
                                         SettingSwitch(preferences.style, "液態玻璃導航", "背景折射與水滴動態", preferences.glass) { update(preferences.copy(glass = it)) }
@@ -216,6 +219,10 @@ fun HaaruApp(bridge: UiBridge) {
             }
             picker?.let { request ->
                 PickerSheet(request, preferences.style, reduced, { picker = null }) { key -> picker = null; request.onSelect(key) }
+            }
+            if (colourPicker) ManualColourSheet(preferences, reduced, { colourPicker = false }) { palette, custom ->
+                colourPicker = false
+                update(preferences.copy(palette = palette, customColour = custom, dynamicColour = false))
             }
             confirmation?.let { request ->
                 AlertDialog(onDismissRequest = { confirmation = null }, title = { Text(request.title) },
@@ -414,4 +421,3 @@ private fun PickerSheet(request: Picker, style: UiStyle, reduced: Boolean, dismi
 }
 
 private fun appearanceName(value: Appearance) = when (value) { Appearance.SYSTEM -> "跟隨系統"; Appearance.LIGHT -> "淺色"; Appearance.DARK -> "深色" }
-private fun paletteName(value: Palette) = when (value) { Palette.MINT -> "薄荷"; Palette.BLUE -> "霧藍"; Palette.VIOLET -> "淡紫"; Palette.ROSE -> "玫瑰" }

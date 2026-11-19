@@ -4,18 +4,21 @@ import kotlinx.serialization.json.*
 
 enum class UiStyle { MIUIX, MATERIAL3 }
 enum class Appearance { SYSTEM, LIGHT, DARK }
-enum class Palette { MINT, BLUE, VIOLET, ROSE }
+enum class Palette { VIOLET, LAVENDER, WISTERIA, IRIS, PLUM, LILAC, ORCHID, MAUVE, PERIWINKLE, MINT, BLUE, ROSE, SAGE, CAFE, SLATE }
 
 data class UiPreferences(
     val style: UiStyle = UiStyle.MIUIX,
     val appearance: Appearance = Appearance.SYSTEM,
-    val palette: Palette = Palette.MINT,
+    val palette: Palette = Palette.VIOLET,
     val glass: Boolean = true,
-    val reduceMotion: Boolean = false
+    val reduceMotion: Boolean = false,
+    val dynamicColour: Boolean = true,
+    val customColour: String = ""
 ) {
     fun encode(): String = buildJsonObject {
         put("style", style.name); put("appearance", appearance.name)
         put("palette", palette.name); put("glass", glass); put("reduceMotion", reduceMotion)
+        put("dynamicColour", dynamicColour); put("customColour", canonicalCustomColour(customColour))
     }.toString()
     companion object {
         fun decode(value: String?): UiPreferences = runCatching {
@@ -23,9 +26,11 @@ data class UiPreferences(
             UiPreferences(
                 enumValues<UiStyle>().firstOrNull { it.name == json["style"]?.jsonPrimitive?.content } ?: UiStyle.MIUIX,
                 enumValues<Appearance>().firstOrNull { it.name == json["appearance"]?.jsonPrimitive?.content } ?: Appearance.SYSTEM,
-                enumValues<Palette>().firstOrNull { it.name == json["palette"]?.jsonPrimitive?.content } ?: Palette.MINT,
+                enumValues<Palette>().firstOrNull { it.name == json["palette"]?.jsonPrimitive?.content } ?: Palette.VIOLET,
                 json["glass"]?.jsonPrimitive?.booleanOrNull ?: true,
-                json["reduceMotion"]?.jsonPrimitive?.booleanOrNull ?: false
+                json["reduceMotion"]?.jsonPrimitive?.booleanOrNull ?: false,
+                json["dynamicColour"]?.jsonPrimitive?.booleanOrNull ?: true,
+                canonicalCustomColour(json["customColour"]?.jsonPrimitive?.contentOrNull.orEmpty())
             )
         }.getOrDefault(UiPreferences())
     }

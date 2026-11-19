@@ -6,7 +6,7 @@ from pathlib import Path
 import struct
 import zipfile
 import zlib
-from release_support import companion_install_properties, companion_properties, safe_relative, source_eligible, validate_companion
+from release_support import companion_install_properties, companion_properties, safe_relative, source_eligible, validate_backend_dex, validate_companion
 
 ROOT = Path(__file__).resolve().parent
 
@@ -33,12 +33,13 @@ def main():
         assert all(not name.startswith("/") and ".." not in name.split("/") and "\\" not in name for name in names)
         assert [name for name in names if name.endswith(".apk")] == ["app/Haaru.apk"]
         assert not any(name.startswith("data/") for name in names)
+        assert not any(name.startswith("webroot/") for name in names), "Only the native App is included"
         assert not set(names).intersection({"uninstall.sh", "system.prop", "disable", "remove", "update", "webroot/appearance.json"})
         properties = dict(line.split("=", 1) for line in archive.read("module.prop").decode().splitlines() if "=" in line)
         assert properties["id"] == "haaru" and properties["version"] == version
         assert properties["name"] == "Haaru" and properties["author"] == "Cekxri"
         assert properties["description"] == "未設定~哦Nya^ ܸ⩌⩊⩌ ܸ^🍞 城堡之下的SIM國度.咖啡廳☕"
-        assert not any(name.endswith((".wasm", ".woff2")) or name == "webroot/ui-build-manifest.json" for name in names)
+        assert manifest["webUi"] is False
         assert "dev.cekxri.haaru" in archive.read("action.sh").decode()
         assert "haaru-upgrade-$ABI" in archive.read("customize.sh").decode()
         for name in names:
@@ -46,6 +47,7 @@ def main():
                 assert (archive.getinfo(name).external_attr >> 16) & 0o777 == 0o755
         for name, key in (("bin/haaru.dex", "dexSha256"), ("bin/hook.dex", "hookDexSha256")):
             data = archive.read(name)
+            validate_backend_dex(data)
             assert data.startswith(b"dex\n") and struct.unpack_from("<I", data, 32)[0] == len(data)
             assert struct.unpack_from("<I", data, 8)[0] == zlib.adler32(data[12:]) & 0xffffffff
             assert data[12:32] == hashlib.sha1(data[32:]).digest()

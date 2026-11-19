@@ -2,7 +2,7 @@ Haaru
 An Apache License 2.0 adaptation of Nrfr's country/operator selection features.
 Version 0.6.0 uses central phone-service return-value copies, two non-persistent
 SIM properties and a phone original-value shadow with a module-owned natural-update
-prepare/commit journal and bounded fresh engine acknowledgment. It has no per-App target list.
+prepare/commit journal and bounded fresh engine acknowledgement. It has no per-App target list.
 It does not submit CarrierConfig overrides or subscription/eSIM metadata setters.
 
 Original project: https://github.com/Ackites/Nrfr
@@ -14,13 +14,14 @@ Root backend, module-file controller, central hook engine, lifecycle checks,
 tests and packaging were written for this adaptation. Reviewed PR/fork sources
 and the 2026-11-17 upstream refresh are recorded in MERGED_CHANGES.md and
 research/nrfr-upstream-delta-2026-11-17.md. Modified files use Apache-2.0 unless
-an explicitly preserved third-party license below applies.
+an explicitly preserved third-party licence below applies.
 
-The small JavaScript exec bridge in module/webroot/app.js is adapted from:
+Earlier prototypes used a small JavaScript exec bridge adapted from:
 KernelSU js/index.js, Copyright KernelSU contributors, Apache License 2.0
 https://github.com/tiann/KernelSU/blob/64833c005eca6a8dc3d73ec2d37d84c37e0d9ad2/js/index.js
 Changes: timeout, callback cleanup, strict command validation, result checking.
 The full Apache License 2.0 text is included in LICENSE.
+This bridge is not shipped in native-only releases.
 
 D8/R8 is a build tool, not part of the installed module or source archive.
 Build tool: Google Android Maven com.android.tools:r8:8.6.27.
@@ -31,14 +32,13 @@ The native Android companion uses:
 - AndroidX Compose and Material 3, Google Android Open Source Project,
   Apache-2.0.
 - Backdrop 2.0.1 (AndroidLiquidGlass), Kyant and contributors, Apache-2.0.
-- Material color utilities 5.0.1, Google/MaterialKolor contributors, Apache-2.0.
+- Material Color Utilities 5.0.1, Google/MaterialKolor contributors, Apache-2.0.
 - Kotlin and kotlinx libraries, their respective contributors, Apache-2.0.
-Additional license texts are in module/webroot/licenses/ and native-licenses/.
-The current App uses system fonts; historical font and web-runtime licenses
-remain as provenance in the source tree.
+Additional licence texts are in module/third-party-licenses/ and
+module/native-licenses/ in the source tree. The App uses system fonts.
 
 The central native engine includes:
-- Zygisk API 4 header, John Wu / Magisk contributors, permissive header license
+- Zygisk API 4 header, John Wu / Magisk contributors, permissive header licence
   reproduced verbatim in native-licenses/Zygisk_API_LICENSE.txt.
 - LSPlant, LSPosed contributors, Apache-2.0, pinned official source
   d8b5d1dbb664abc606644036822e4bb64547edf6.
@@ -51,7 +51,7 @@ The central native engine includes:
 - nlohmann/json, Niels Lohmann and contributors, MIT.
 - LLVM libc++ / libc++abi / compiler runtime from the pinned Android NDK,
   their contributors, Apache-2.0 with LLVM exceptions.
-Native dependency license texts and NDK notices are distributed under
+Native dependency licence texts and NDK notices are distributed under
 module/native-licenses/ in the source archive and native-licenses/ in the
 installation ZIP. Exact commits, coordinates, hashes, toolchain and rebuilt
 asset metadata are in native/vendor/pins.json and module/native-build-manifest.json.
@@ -70,7 +70,7 @@ bridge remain. Rust toolchain 1.100.0 is pinned to official 2026-11-12 component
 Rust standard library and its third-party notices are in Rust_std_COPYRIGHT.txt,
 Rust_std_LICENSE-APACHE.txt and Rust_std_LICENSE-MIT.txt under native-licenses.
 Linked Cargo crates include serde_json, serde_core, libc, memchr, itoa and zmij;
-versions/checksums are pinned in rust-core/Cargo.lock, with license copies under
+versions/checksums are pinned in rust-core/Cargo.lock, with licence copies under
 native-licenses/Rust_*. Rust FFI and native hooks still have unsafe boundaries.
 
 Haaru is maintained by Cekxri. The public source includes no live device

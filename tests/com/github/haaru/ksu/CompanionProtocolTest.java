@@ -4,7 +4,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-/** Host coverage for the actual IPC frame parser and package/signature authorization rules. */
+/** Host coverage for the actual IPC frame parser and package/signature authorisation rules. */
 public final class CompanionProtocolTest {
     private static int checks;
     private static void check(boolean value, String message) { checks++; if (!value) throw new AssertionError(message); }
@@ -35,7 +35,7 @@ public final class CompanionProtocolTest {
         check(!CompanionProtocol.authorized(0, 0, new String[] {CompanionProtocol.PACKAGE}, new String[] {pin}, pin), "root peer is not the companion App");
         check(!CompanionProtocol.authorized(12346, 12345, new String[] {CompanionProtocol.PACKAGE}, new String[] {pin}, pin), "client supplied package name cannot replace SO_PEERCRED UID");
         check(!CompanionProtocol.authorized(12345, 12345, new String[] {"other.app"}, new String[] {pin}, pin), "same signer with another package cannot access the service");
-        check(!CompanionProtocol.authorized(12345, 12345, new String[] {CompanionProtocol.PACKAGE, "other.app"}, new String[] {pin}, pin), "shared UID cannot borrow companion authorization");
+        check(!CompanionProtocol.authorized(12345, 12345, new String[] {CompanionProtocol.PACKAGE, "other.app"}, new String[] {pin}, pin), "shared UID cannot borrow companion authorisation");
         check(!CompanionProtocol.authorized(12345, 12345, new String[] {CompanionProtocol.PACKAGE}, new String[] {wrong}, pin), "replacement APK with a different signer is rejected");
         check(!CompanionProtocol.authorized(12345, 12345, new String[] {CompanionProtocol.PACKAGE}, new String[] {pin, wrong}, pin), "multiple signer APK cannot bypass the release pin");
         check(!CompanionProtocol.authorized(12345, 12345, null, new String[] {pin}, pin), "missing installed UID ownership fails closed");

@@ -177,7 +177,7 @@ public final class AndroidBackendTest {
         check(TelephonyManager.staticCountryCalls == 2 && TelephonyManager.defaultCalls == 0 && TelephonyManager.scopedCalls == 0,
                 "successful static reads never use the null Context singleton");
         check(ActivityThread.systemMainCalls == 0 && Context.phoneServiceReads == 0 && Looper.prepareMainCalls == 0,
-                "common country reads do not initialize ActivityThread or the system Context");
+                "common country reads do not initialise ActivityThread or the system Context");
         TelephonyManager.SIM_COUNTRIES.put(7, "");
         check("".equals(f.backend.simCountry(7)), "a genuinely blank system country remains blank without inventing an ISO");
     }
@@ -205,7 +205,7 @@ public final class AndroidBackendTest {
         check(f.sub.phoneReads == 2 && TelephonyManager.staticPhoneCalls == 2,
                 "phone-index getter uses the authoritative direct ISub API");
         check(ActivityThread.systemMainCalls == 0 && TelephonyManager.defaultCalls == 0 && f.carrier.writes == 0,
-                "mapping recovery requires no Context initialization or telephony setter");
+                "mapping recovery requires no Context initialisation or telephony setter");
         f.sub.phoneFailure = new UnsupportedOperationException("phone API unavailable");
         check("gb".equals(f.backend.simCountry(2)), "direct getSlotIndex recovers the logical phone when getPhoneId is unsupported");
         f.sub.slotFailure = new UnsupportedOperationException("slot API unavailable");
@@ -253,7 +253,7 @@ public final class AndroidBackendTest {
         check(ActivityThread.currentActivityThread() == null && Looper.myLooper() == null, "app_process fixture begins without Android application or Looper");
         check("tw".equals(f.backend.simCountry(7)) && "gb".equals(f.backend.simCountry(8)), "ROM without static getters uses a valid Context-backed scoped manager");
         check(ActivityThread.systemMainCalls == 1 && Looper.prepareMainCalls == 1,
-                "fallback initializes one system Context only after preparing its Looper");
+                "fallback initialises one system Context only after preparing its Looper");
         check(Context.phoneServiceReads == 1 && TelephonyManager.scopedCalls == 2,
                 "the Context-backed base manager is reused while each read still uses its own subId");
         check(TelephonyManager.defaultCalls == 0 && Context.applicationReads >= 3,
@@ -268,7 +268,7 @@ public final class AndroidBackendTest {
         ActivityThread.application = new Context();
         check("sg".equals(f.backend.simCountry(7)), "existing application Context is preferred over creating a system thread");
         check(ActivityThread.systemMainCalls == 0 && Looper.prepareMainCalls == 0,
-                "existing Context does not reinitialize ActivityThread or the main Looper");
+                "existing Context does not reinitialise ActivityThread or the main Looper");
         f = fixture();
         TelephonyManager.staticCountryUnsupported = TelephonyManager.staticPhoneUnsupported = true;
         mapPhone(f, 7, 0); TelephonyManager.SIM_COUNTRIES.put(7, "de");
@@ -286,7 +286,7 @@ public final class AndroidBackendTest {
             @Override public void run() throws Exception { denied.simCountry(7); }
         }, "real getter permission errors are unwrapped rather than swallowed by fallback");
         check("country read denied".equals(permission.getMessage()) && ActivityThread.systemMainCalls == 0,
-                "permission failure is preserved and does not initialize a bypass Context");
+                "permission failure is preserved and does not initialise a bypass Context");
         f = fixture();
         TelephonyManager.staticCountryUnsupported = TelephonyManager.staticPhoneUnsupported = true;
         mapPhone(f, 7, 0); ActivityThread.nullSystemContext = true;
@@ -295,7 +295,7 @@ public final class AndroidBackendTest {
             @Override public void run() throws Exception { missing.simCountry(7); }
         }, "unavailable shell Context reports an actionable failure instead of a null dereference");
         check(absent.getMessage().contains("Context") && TelephonyManager.scopedCalls == 0,
-                "no scoped manager is constructed when Context initialization failed");
+                "no scoped manager is constructed when Context initialisation failed");
         f = fixture();
         TelephonyManager.staticCountryUnsupported = TelephonyManager.staticPhoneUnsupported = true;
         mapPhone(f, 7, 0);
@@ -457,7 +457,7 @@ public final class AndroidBackendTest {
         Files.write(path, "{\"bootId\":\"fixture-boot\",\"countryList\":\"TW,jP,\"}".getBytes(StandardCharsets.UTF_8));
         check("tw".equals(backend.simCountry(7)) && "jp".equals(backend.simCountry(8)), "current-boot shadow recovers original dual-SIM values instead of overlaid getters");
         check("".equals(backend.simCountry(9)), "trailing empty slot is an original blank country rather than overlay fallback");
-        check("us".equals(f.backend.simCountry(7)), "default constructor keeps existing reflection-only behavior");
+        check("us".equals(f.backend.simCountry(7)), "default constructor keeps existing reflection-only behaviour");
         Files.write(path, "{\"bootId\":\"old-boot\",\"countryList\":123}".getBytes(StandardCharsets.UTF_8));
         check("us".equals(backend.simCountry(7)), "stale shadow falls back before inspecting stale country tokens");
         for (String invalid : new String[] {

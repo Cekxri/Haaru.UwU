@@ -90,8 +90,8 @@ public final class GlobalHooksTest {
         int count = GlobalHooks.initialize(new Context(GlobalHooksTest.class.getClassLoader()));
         equal(13, count, "every required Android 16 service exit is installed");
         equal(13, installer.installed.size(), "three config and ten ISub hooks");
-        equal(13, GlobalHooks.initialize(new Context(GlobalHooksTest.class.getClassLoader())), "successful initialization is idempotent");
-        equal(13, installer.attempts, "idempotent initialization avoids double hooking");
+        equal(13, GlobalHooks.initialize(new Context(GlobalHooksTest.class.getClassLoader())), "successful initialisation is idempotent");
+        equal(13, installer.attempts, "idempotent initialisation avoids double hooking");
         configure(); return installer;
     }
     private static PersistableBundle bundle() {
@@ -108,7 +108,7 @@ public final class GlobalHooksTest {
         Map<String, Object> baseline = new LinkedHashMap<String, Object>(service.result.values);
         PersistableBundle copy = (PersistableBundle) invoke(config, service, 10, "package", "feature");
         check(copy != service.result, "external configuration is copied");
-        equal("us", copy.values.get(COUNTRY), "country normalized");
+        equal("us", copy.values.get(COUNTRY), "country normalised");
         equal("US Carrier", copy.values.get(NAME), "first SIM name copied");
         equal(true, copy.values.get(FLAG), "carrier preference on returned copy");
         equal(true, copy.values.get("carrier_volte_available_bool"), "unrelated IMS config retained");
@@ -234,11 +234,11 @@ public final class GlobalHooksTest {
         String firstFailure = GlobalHooks.getError();
         check(firstFailure.contains(failed.failedTarget.getDeclaringClass().getName() + "." + failed.failedTarget.getName()) && firstFailure.contains("java.lang.String"),
                 "bootstrap diagnostic retains the exact class, method and parameter types");
-        equal(4, failed.attempts, "initialization stops at first missing hook");
+        equal(4, failed.attempts, "initialisation stops at first missing hook");
         try { GlobalHooks.initialize(new Context(GlobalHooksTest.class.getClassLoader())); throw new AssertionError("partial retry accepted"); }
         catch (IllegalStateException expected) { check(expected.getMessage().contains(firstFailure), "partial retry retains the original failure"); }
         equal(firstFailure, GlobalHooks.getError(), "partial retry cannot overwrite original bootstrap evidence");
-        equal(4, failed.attempts, "partial initialization never double-hooks previous targets");
+        equal(4, failed.attempts, "partial initialisation never double-hooks previous targets");
     }
     private static void missingBootstrapDependencies(FakeCaller caller) throws Throwable {
         GlobalHooks.resetForTests(); FakeInstaller installer = new FakeInstaller();
