@@ -56,8 +56,11 @@ inline nlohmann::json disconnectedAck(const nlohmann::json& prior, int sdk, std:
         if (prior.contains("error") && prior["error"].is_string() && !prior["error"].get_ref<const std::string&>().empty())
             error = prior["error"].get<std::string>();
     }
+    if (stage == "specialization" && error == "Phone engine disconnected")
+        error = "Phone companion disconnected before post-specialisation validation";
     auto result = engineAck(false, false, false, hooks, sdk, boot, hash, timestamp, phonePid, stage, error);
-    for (const char* key : {"requiredHooks", "supportsCountry", "supportsCarrierName"})
+    for (const char* key : {"requiredHooks", "supportsCountry", "supportsCarrierName",
+            "fdExemptionReported", "fdIgnoreListAvailable"})
         if (prior.is_object() && prior.contains(key)) result[key] = prior[key];
     result["connected"] = false;
     return result;

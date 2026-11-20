@@ -13,14 +13,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -33,8 +32,6 @@ import androidx.compose.ui.unit.sp
 import com.kyant.shapes.RoundedRectangle
 import haaru.ui.HaaruTheme
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -89,12 +86,9 @@ internal fun AboutInformation(moduleVersion: String, onOpen: () -> Unit) {
 
 /** Transparent foreground for the persistent GLES sculpture, followed by native project tasks. */
 @Composable
-internal fun AboutPage(moduleVersion: String, onBack: () -> Unit, onScroll: (Float) -> Unit = {}) {
+internal fun AboutPage(moduleVersion: String, listState: LazyListState, onBack: () -> Unit) {
     val colours = HaaruTheme.colours
     val openLink = rememberAboutLinkOpener()
-    val listState = rememberLazyListState()
-    val itemHeights = remember { mutableStateMapOf<Int, Int>() }
-    val currentOnScroll by rememberUpdatedState(onScroll)
     val collapseDistance = with(LocalDensity.current) { 90.dp.roundToPx() }
     val compact by remember(listState, collapseDistance) {
         derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > collapseDistance }
@@ -106,23 +100,16 @@ internal fun AboutPage(moduleVersion: String, onBack: () -> Unit, onScroll: (Flo
     val statusInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    // Measured item heights include their own padding. No guessed index-to-distance multiplier.
-    LaunchedEffect(listState) {
-        snapshotFlow {
-            val index = listState.firstVisibleItemIndex
-            (0 until index).sumOf { itemHeights[it] ?: 0 }.toFloat() + listState.firstVisibleItemScrollOffset
-        }.distinctUntilChanged().collect { currentOnScroll(it) }
-    }
     BackHandler(onBack = onBack)
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp,
                 top = statusInset + 75.dp, bottom = navigationInset + 30.dp)) {
             item("brand-stage") {
-                AboutBrandStage(moduleVersion, Modifier.onSizeChanged { itemHeights[0] = it.height })
+                AboutBrandStage(moduleVersion)
             }
             item("project") {
-                AboutTaskGroup("專案", Modifier.onSizeChanged { itemHeights[1] = it.height }.padding(top = 28.dp)) {
+                AboutTaskGroup("專案", Modifier.padding(top = 28.dp)) {
                     AboutTaskRow("Haaru.UwU", "源碼與問題回報") { openLink(ProjectUrl) }
                     AboutRowDivider()
                     AboutTaskRow("版本更新", "GitHub Releases") { openLink("$ProjectUrl/releases") }
@@ -131,14 +118,14 @@ internal fun AboutPage(moduleVersion: String, onBack: () -> Unit, onScroll: (Flo
                 }
             }
             item("open-source") {
-                AboutTaskGroup("開源與資料來源", Modifier.onSizeChanged { itemHeights[2] = it.height }.padding(top = 28.dp)) {
+                AboutTaskGroup("開源與資料來源", Modifier.padding(top = 28.dp)) {
                     AboutTaskRow("引用與鳴謝", "開源專案、預設資料與隨附授權") { creditsShown = true }
                     AboutRowDivider()
                     AboutTaskRow("完整授權與來源說明", "NOTICE") { openLink("$ProjectUrl/blob/main/NOTICE") }
                 }
             }
             item("signature") {
-                Column(Modifier.fillMaxWidth().onSizeChanged { itemHeights[3] = it.height }.padding(top = 28.dp),
+                Column(Modifier.fillMaxWidth().padding(top = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("Nya^ ܸ⩌⩊⩌ ܸ^", style = MiuixTheme.textStyles.footnote1, color = colours.onSurfaceVariant)
                     Text("Made by Cekxri · Apache-2.0", style = MiuixTheme.textStyles.footnote1, color = colours.onSurfaceVariant)

@@ -136,14 +136,16 @@ class SculptureController(context: Context) : AutoCloseable {
         }.getOrDefault(false)
     }
 
-    fun update(page: Int, colours: HaaruColours, reducedMotion: Boolean, active: Boolean = true) {
+    fun update(page: Int, colours: HaaruColours, reducedMotion: Boolean, active: Boolean, offsetPx: Float, density: Float) {
         val palette = SculpturePalette.from(colours)
-        edit { it.copy(page = page.coerceIn(0, 3), palette = palette, reduced = reducedMotion, active = active) }
+        edit { current ->
+            current.copy(page = page, palette = palette, reduced = reducedMotion, active = active,
+                scrollPx = offsetPx, density = density, pressed = current.pressed && current.page == page)
+        }
     }
 
-    fun scroll(offsetPx: Float, density: Float) {
-        edit { it.copy(scrollPx = if (offsetPx.isFinite()) offsetPx.coerceAtLeast(0f) else 0f,
-            density = if (density.isFinite() && density > 0f) density else 1f) }
+    fun scroll(page: Int, offsetPx: Float) {
+        edit { if (it.page == page) it.copy(scrollPx = offsetPx) else it }
     }
 
     fun pointer(xFraction: Float, yFraction: Float, pressed: Boolean) {

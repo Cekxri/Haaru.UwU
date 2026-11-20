@@ -28,6 +28,7 @@ import haaru.ui.UiStyle
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Text
 import java.util.Locale
+import kotlinx.serialization.json.*
 
 /** The editor owns only local selection state. All durable actions use HaaruState. */
 @Composable
@@ -251,11 +252,13 @@ private fun PlanAction(label: String, explanation: String, enabled: Boolean, act
 @Composable
 private fun PlanDiagnostics(state: HaaruState, preferenceError: String) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var copied by remember(state.diagnostics, preferenceError) { mutableStateOf(false) }
-    var copyFailed by remember(state.diagnostics, preferenceError) { mutableStateOf(false) }
+    val payload = remember(state.diagnostics, preferenceError) {
+        shareableDiagnostics(state.diagnostics, preferenceError.isNotBlank())
+    }
+    var copied by remember(payload) { mutableStateOf(false) }
+    var copyFailed by remember(payload) { mutableStateOf(false) }
     val context = LocalContext.current
     val colours = HaaruTheme.colours
-    val payload = state.diagnostics + if (preferenceError.isNotBlank()) "\nPreferences: $preferenceError" else ""
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("診斷", fontSize = 18.sp, lineHeight = 25.sp, fontWeight = FontWeight.Medium, color = colours.onSurface)
         PlanMessage("需要排查問題時，再查看模組與電話引擎的詳細回報。")
@@ -287,9 +290,47 @@ private fun PlanDiagnostics(state: HaaruState, preferenceError: String) {
             }.getOrDefault(false)
             copyFailed = !copied
         }, enabled = payload.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-            Text(if (copied) "已複製診斷" else "複製診斷", color = if (payload.isNotBlank()) colours.onSurfaceVariant
+            Text(if (copied) "已複製診斷" else "複製去識別診斷", color = if (payload.isNotBlank()) colours.onSurfaceVariant
                 else colours.onSurface.copy(alpha = .38f))
         }
         if (copyFailed) PlanMessage("暫時無法使用剪貼簿，請稍後再試。", error = true)
     }
+}
+
+/** Export only the fields needed to diagnose engine startup. */
+internal fun shareableDiagnostics(raw: String, appearanceIssue: Boolean): String {
+    if (raw.isBlank() && !appearanceIssue) return ""
+    val report = runCatching { Json.parseToJsonElement(raw) as? JsonObject }.getOrNull()
+    val engine = report?.get("globalEngine") as? JsonObject
+    val version = (report?.get("moduleVersion") as? JsonPrimitive)?.contentOrNull
+    val stage = (engine?.get("stage") as? JsonPrimitive)?.contentOrNull
+    val error = (engine?.get("error") as? JsonPrimitive)?.contentOrNull.orEmpty()
+    val errorKind = when {
+        error.contains("post-specialisation validation") || error.contains("did not survive process specialisation") -> "startup-disconnect"
+        error.contains("round-trip failed") -> "startup-round-trip-failed"
+        error.contains("disconnected", ignoreCase = true) -> "disconnected"
+        error.isNotBlank() -> "engine-error"
+        else -> "none"
+    }
+    return buildJsonObject {
+        put("statusAvailable", report != null)
+        if (version != null && Regex("[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}").matches(version)) put("moduleVersion", version)
+        for (key in listOf("readOnly", "enabled", "upgradePending")) {
+            (report?.get(key) as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull?.let { put(key, it) }
+        }
+        if (engine != null) put("engine", buildJsonObject {
+            for (key in listOf("sdk", "hooks", "requiredHooks")) {
+                (engine[key] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull?.takeIf { it in 0..1000 }?.let { put(key, it) }
+            }
+            for (key in listOf("connected", "initialized", "applied", "coverageComplete", "fdExemptionReported", "fdIgnoreListAvailable")) {
+                (engine[key] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull?.let { put(key, it) }
+            }
+            if (stage in setOf("companion", "hook-dex", "property-baseline", "property-guards", "connection-retention",
+                    "specialization", "connection-validation", "property-restore", "art-symbols", "dex-loader",
+                    "dex-cookie-access", "lsplant", "application-attach-hook", "awaiting-application-attach",
+                    "central-service-hooks", "engine-thread", "connection", "runtime")) put("stage", stage)
+            put("errorKind", errorKind)
+        })
+        put("appearanceIssue", appearanceIssue)
+    }.toString()
 }

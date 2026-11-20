@@ -172,6 +172,13 @@ int main() {
         "disconnect retains last observed config hash and partial hook count");
     check(!disconnected["ok"].get<bool>() && !disconnected["initialized"].get<bool>() && !disconnected["applied"].get<bool>(),
         "complete disconnect metadata never claims engine success");
+    auto pending = haaru::engineAck(false, false, false, 0, 36, "fixture-boot", "", 123458, 2870, "specialization", "");
+    pending["fdExemptionReported"] = true;
+    pending["fdIgnoreListAvailable"] = false;
+    auto earlyDisconnect = haaru::disconnectedAck(pending, 36, "fixture-boot", 123459, 2870);
+    check(earlyDisconnect["error"] == "Phone companion disconnected before post-specialisation validation" &&
+        earlyDisconnect["fdExemptionReported"] == true && earlyDisconnect["fdIgnoreListAvailable"] == false &&
+        earlyDisconnect["initialized"] == false, "early EOF records retention evidence without confirming bootstrap");
     auto healthy = haaru::engineAck(true, true, true, 14, 36, "fixture-boot", "hash-8", 123458, 2870, "runtime", "", 14, true, true, true);
     for (int discovered : {3, 7, 19}) {
         auto adaptive = haaru::engineAck(true, true, true, discovered, 29, "fixture-boot", "hash-8", 123458, 2870, "runtime", "", discovered, true, true, true);

@@ -386,6 +386,9 @@ public final class Controller {
             out.put("error", error);
             if (ack.get("stage") != null) out.put("stage", ackString(ack, "stage", 96));
             boolean ok = ackBoolean(ack, "ok"), initialized = ackBoolean(ack, "initialized"), applied = ackBoolean(ack, "applied");
+            for (String key : Arrays.asList("connected", "fdExemptionReported", "fdIgnoreListAvailable")) {
+                if (ack.get(key) instanceof Boolean) out.put(key, ack.get(key));
+            }
             int hooks = ackInteger(ack, "hooks"), sdk = ackInteger(ack, "sdk");
             int phonePid = ackInteger(ack, "phonePid");
             int requiredHooks = ackInteger(ack, "requiredHooks");

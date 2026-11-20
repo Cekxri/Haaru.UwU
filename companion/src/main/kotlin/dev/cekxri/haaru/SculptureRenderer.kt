@@ -172,7 +172,8 @@ internal class SculptureRenderer(
     private val inverseModel = FloatArray(16)
     private val normalModel = FloatArray(16)
     private val weights = floatArrayOf(1f, 0f, 0f, 0f)
-    private val weightVelocity = FloatArray(4)
+    private val morphOrigin = weights.copyOf()
+    private var morphTime = .55f
     private val material = FloatArray(4)
     private val baseColour = FloatArray(3)
     private var time = 0f
@@ -286,6 +287,7 @@ internal class SculptureRenderer(
         if (closed) return
         val wasVisible = visible()
         val wasReduced = input.reduced
+        val pageChanged = value.page != input.page
         val wasPowerLimited = input.powerSave || input.thermal >= PowerManager.THERMAL_STATUS_MODERATE
         if (!value.reduced && lastPressed && value.pressed) {
             yawVelocity = (yawVelocity + (value.pointerX - lastPointerX) * 15f).coerceIn(-4f, 4f)
@@ -303,11 +305,17 @@ internal class SculptureRenderer(
             }.onFailure { Log.w("HaaruSculpture", "Surface frame-rate request unavailable: " + it.message.orEmpty().take(200)) }
             surfaceRequestedHz = surfaceRate
         }
-        if (value.reduced) {
-            for (index in 0..3) { weights[index] = if (index == value.page) 1f else 0f; weightVelocity[index] = 0f }
-            yaw = 0f; pitch = 0f; yawVelocity = 0f; pitchVelocity = 0f; press = 0f
-            scroll = value.scrollPx
+        if (pageChanged) {
+            weights.copyInto(morphOrigin)
+            morphTime = 0f
+            yawVelocity = 0f; pitchVelocity = 0f; press = 0f
         }
+        if (value.reduced) {
+            for (index in weights.indices) weights[index] = if (index == value.page) 1f else 0f
+            morphTime = .55f
+            yaw = 0f; pitch = 0f; yawVelocity = 0f; pitchVelocity = 0f; press = 0f
+        }
+        if (value.reduced || pageChanged || !wasVisible) scroll = value.scrollPx.coerceAtMost(heightPx * 1.18f)
         val requiredTier = when {
             value.thermal >= PowerManager.THERMAL_STATUS_SEVERE || value.lowRam -> 2
             value.reduced && !value.powerSave && value.thermal < PowerManager.THERMAL_STATUS_MODERATE -> 0
@@ -441,14 +449,17 @@ internal class SculptureRenderer(
         val steps = max(1, (dt / .008f).toInt())
         val step = dt / steps
         repeat(steps) {
-            var total = 0f
-            for (index in 0..3) {
-                val target = if (index == input.page) 1f else 0f
-                weightVelocity[index] += ((target - weights[index]) * 66f - weightVelocity[index] * 14f) * step
-                weights[index] = (weights[index] + weightVelocity[index] * step).coerceIn(0f, 1f)
-                total += weights[index]
+            if (morphTime < .55f) {
+                morphTime = (morphTime + step).coerceAtMost(.55f)
+                val t = morphTime / .55f
+                // The blend remains inside the four poses even when a new tab
+                // interrupts a morph. Restart from the geometry actually drawn.
+                val mix = t * t * (3f - 2f * t)
+                for (index in weights.indices) {
+                    val target = if (index == input.page) 1f else 0f
+                    weights[index] = morphOrigin[index] + (target - morphOrigin[index]) * mix
+                }
             }
-            if (total > .0001f) for (index in 0..3) weights[index] /= total
             val targetYaw = if (input.pressed) (input.pointerX - .67f) * 1.2f else 0f
             val targetPitch = if (input.pressed) (input.pointerY - .51f) * .70f else 0f
             yawVelocity += ((targetYaw - yaw) * 35f - yawVelocity * 6.8f) * step
@@ -456,7 +467,7 @@ internal class SculptureRenderer(
             yaw = (yaw + yawVelocity * step).coerceIn(-.9f, .9f)
             pitch = (pitch + pitchVelocity * step).coerceIn(-.65f, .65f)
             press += ((if (input.pressed) 1f else 0f) - press) * min(1f, step * 13f)
-            scroll += (input.scrollPx - scroll) * min(1f, step * 15f)
+            scroll += (input.scrollPx.coerceAtMost(heightPx * 1.18f) - scroll) * min(1f, step * 15f)
         }
     }
 

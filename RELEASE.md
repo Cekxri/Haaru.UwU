@@ -1,26 +1,23 @@
-# Haaru 0.8.1 發佈準備
+# Haaru 0.8.2 發佈準備
 
-**0.8.1（versionCode 16）為公開預覽版。** 這版修正 SIM 方案、外觀保存和引擎確認，延續 0.8.0 公開預覽版的 Miuix、Backdrop 和 GLES3 場景。既有模擬器畫面與效能樣本來自 0.8.0。手機效能和 KernelSU 電話引擎仍待實機驗證，`deviceTested=false`。
+**0.8.2（versionCode 17）為公開預覽版。** 這版修正切頁畫面重疊、雕塑錯位、亮色過白及電話引擎啟動。既有幀時序樣本來自 0.8.0。手機效能和 KernelSU 電話引擎仍待實機驗證，`deviceTested=false`。
 
 ## 交付檔案
 
 | 檔案 | 用途 |
 | --- | --- |
-| `Haaru-0.8.1.zip` | KSU 模組與同版本已簽 APK；安裝完成後完整重啟 |
-| `Haaru-0.8.1.apk` | 原生 Miuix／GLES3 配套 App，同 package／簽章更新 |
-| `Haaru-0.8.1-source.zip` | 白名單 source，排除私人簽章／診斷／設定 |
+| `Haaru-0.8.2.zip` | KSU 模組與同版本已簽 APK；安裝完成後完整重啟 |
+| `Haaru-0.8.2.apk` | 原生 Miuix／GLES3 配套 App，同 package／簽章更新 |
+| `Haaru-0.8.2-source.zip` | 白名單 source，排除私人簽章／診斷／設定 |
 | `SHA256SUMS.txt` | 最終交付檔案校驗值 |
 | build／companion manifests | 實際來源／工具／版本／產物／簽章指紋 |
 | release-verification／device-report | 分開記錄發佈驗證與當前真機 scope |
 
 ZIP 的同版 App 自動安裝與 Android 未就緒時開機續裝保留；KSU 執行按鈕開啟 App 或重試安裝 ZIP 內 APK，不向 latest 取錯版本。App 無需單獨 superuser 授權，模組 IPC 以真實 peer UID／package UID／APK signer 核對身份並只接受固定操作。
 
-## 0.8.1 變更
+## 0.8.2 變更
 
-- 「重新套用已存方案」會重新啟用曾停用的方案。App 將部分生效、全域確認與過期回報分開呈現。
-- SIM 儲存和單卡重套請求綁定畫面讀到的 SIM。模組偵測到換卡會拒絕舊請求。讀到新卡後，App 清除上一張卡的草稿，並依目前 SIM 身分判斷可預填或重套的方案。
-- 外觀偏好首次讀取成功後才開放修改，在返回前景或手動重新讀取時再載入。儲存成功以模組核對過的回覆為準。
-- 模組確認中央回應方案清除成功，並讀回兩項非持久屬性的原值，才能回報還原完成。多卡電信商名稱合計超出系統位元組限制時，介面提示縮短名稱。
+切頁、亮色與電話引擎啟動的變更見 [更新紀錄](CHANGELOG.md)。分享診斷以固定欄位輸出，避免帶出 SIM 和裝置資訊。
 
 ## 最終建置與驗證
 
@@ -33,7 +30,7 @@ python build_native.py
 python build_companion.py --java-home "C:/path/to/jdk-21"
 python build.py
 python verify_release.py
-python privacy_guard.py --artifact dist/Haaru-0.8.1.zip --artifact dist/Haaru-0.8.1.apk --artifact dist/Haaru-0.8.1-source.zip --output dist/publication-privacy-audit.json
+python privacy_guard.py --artifact dist/Haaru-0.8.2.zip --artifact dist/Haaru-0.8.2.apk --artifact dist/Haaru-0.8.2-source.zip --output dist/publication-privacy-audit.json
 ```
 
 在 PATH 設定 JDK 21，供整包建置與 APK 驗證共用。以當次主機測試報告與 `dist/SHA256SUMS.txt`、`dist/release-verification.json`、`dist/publication-privacy-audit.json` 核對模組 ZIP、APK 與來源封裝。核對 ZIP 內的 APK 和獨立 APK 完全一致，以及簽章憑證與上一個已發佈版本相同。0.8.0 模擬器的來源指紋和數據見 [原生介面建置](UI_BUILD.md)。

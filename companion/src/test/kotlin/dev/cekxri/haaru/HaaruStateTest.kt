@@ -212,6 +212,17 @@ class HaaruStateTest {
         assertEquals(full, SimPlanInput.limitCarrier(full + character))
     }
 
+    @Test fun sharedDiagnosticsKeepsEngineStageWithoutExportingSimOrDeviceValues() {
+        val privateValue = "fixture-private"
+        val raw = """{"ok":true,"moduleVersion":"0.8.2","bootId":"$privateValue","subscriptions":[{"subId":47291,"selectionToken":"$privateValue","originalCarrierName":"$privateValue"}],"globalEngine":{"phonePid":64919,"timestampMs":1795000000000,"sdk":36,"hooks":0,"stage":"specialization","connected":false,"error":"Phone companion disconnected before post-specialisation validation $privateValue"}}"""
+        val shared = shareableDiagnostics(raw, appearanceIssue = false)
+        assertTrue(shared.contains("specialization"))
+        assertTrue(shared.contains("startup-disconnect"))
+        for (value in listOf(privateValue, "47291", "64919", "1795000000000", "bootId", "selectionToken")) {
+            assertFalse(shared.contains(value))
+        }
+    }
+
     @Test fun shellAndFrameworkErrorsStayOutOfNormalUiText() {
         assertFalse(friendlyError("Attempt to invoke android.content.Context on a null object reference").contains("android.content"))
         assertFalse(friendlyError("Global engine ACK unavailable: Invalid global engine sdk").contains("ACK"))

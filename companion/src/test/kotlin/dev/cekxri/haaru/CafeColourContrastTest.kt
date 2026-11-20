@@ -28,6 +28,14 @@ class CafeColourContrastTest {
         }
     }
 
+    @Test fun lightModeSeparatesTheMutedGroundFromTheCards() {
+        for (style in ColourStyle.entries) {
+            val colours = cafeColours(manualColours(false, Color(0xFF7E57C2), style), false)
+            assertTrue(colours.background.luminance() <= .70f)
+            assertTrue(colours.surface.luminance() - colours.background.luminance() >= .07f)
+        }
+    }
+
     @Test fun changingThePaletteChangesTheWholeMaterialWorld() {
         for (dark in listOf(false, true)) {
             val violet = cafeColours(manualColours(dark, Color(0xFF7E57C2)), dark)

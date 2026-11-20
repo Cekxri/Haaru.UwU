@@ -1,5 +1,15 @@
 # 更新紀錄 / Changes
 
+## 0.8.2 — 公開預覽 / Public preview
+
+- 切頁時只顯示目的頁；3D 雕塑保留跨頁變形並跟隨目前頁面的捲動位置。亮色背景降低亮度，和卡片形成清楚層次。
+- 調整電話引擎啟動時的連線確認順序。啟動前確認的開機身分會沿用到電話程序，斷線回報保留檢查階段。
+- 分享診斷只包含版本、引擎狀態和錯誤類別，省略 SIM、程序、開機識別及時間戳。
+
+- Tab changes display the destination page while the sculpture morphs and follows that page's scroll position. Light mode uses a dimmer background with clearer card separation.
+- The phone engine checks its companion before initialising and retains the boot identity verified before specialisation. Early disconnect reports preserve the relevant startup stage.
+- Shared diagnostics include the version, engine status and error category, with SIM and device identifiers omitted.
+
 ## 0.8.1 — 公開預覽 / Public preview
 
 - 修正「重新套用已存方案」漏掉已停用方案的問題。前景會定期更新狀態，分開顯示部分生效與完整確認，讓過期的回報退出成功狀態。

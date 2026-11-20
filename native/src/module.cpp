@@ -10,6 +10,7 @@
 #include "engine_diagnostics.hpp"
 #include "companion_connection.hpp"
 #include <android/api-level.h>
+#include <android/log.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
@@ -63,6 +64,7 @@ thread_local unsigned int internalDepth = 0;
 std::mutex stateMutex, publisherMutex, channelMutex, companionMutex, diagnosticMutex;
 std::condition_variable wake;
 std::string baseCountry, baseName;
+std::string verifiedPhoneBoot;
 std::vector<haaru::PropertyProfile> published;
 uint64_t baseRevision = 0;
 bool baseVerified = false;
@@ -90,6 +92,7 @@ std::pair<std::string, std::string> diagnostic() {
     return {bootstrapStage, bootstrapError};
 }
 std::string bootId();
+const std::string& phoneBootId() { return verifiedPhoneBoot; }
 Json acknowledgement(bool ok, bool initialized, bool applied, std::string_view hash = {}, std::string_view error = {}) {
     auto [stage, failure] = diagnostic();
     bool failed = !failure.empty();
@@ -97,7 +100,7 @@ Json acknowledgement(bool ok, bool initialized, bool applied, std::string_view h
     if (failure.empty()) failure = std::string(error);
     if (sdk <= 0 && failure.empty()) failure = "Cannot determine Android SDK: NDK API=" +
         std::to_string(android_get_device_api_level()) + ", ro.build.version.sdk=" + haaru::boundedDiagnostic(readProperty("ro.build.version.sdk"), 48);
-    auto ack = haaru::engineAck(ok && !failed, initialized && !failed, applied && !failed, hookCount.load(), sdk, bootId(), hash, timestampMs(), getpid(), stage, failure,
+    auto ack = haaru::engineAck(ok && !failed, initialized && !failed, applied && !failed, hookCount.load(), sdk, phoneBootId(), hash, timestampMs(), getpid(), stage, failure,
         requiredHookCount.load(), coverageReady && !failed, countrySupported.load(), nameSupported.load());
     ack["fdExemptionReported"] = fdExemptionReported.load();
     ack["fdIgnoreListAvailable"] = fdIgnoreListAvailable.load();
@@ -202,17 +205,18 @@ bool atomicAt(int directory, const char* name, const Json& value) {
     if (ok) ok = renameat(directory, temporary.c_str(), directory, name) == 0;
     unlinkat(directory, temporary.c_str(), 0); return ok;
 }
-bool validConfig(const Json& value) {
-    return haaru::rustValidRuntime(value, bootId());
+bool validConfig(const Json& value, const std::string& verifiedBoot) {
+    return haaru::rustValidRuntime(value, verifiedBoot);
 }
-bool validShadow(const Json& value) {
-    return haaru::rustValidShadow(value, bootId());
+bool validShadow(const Json& value, const std::string& verifiedBoot) {
+    return haaru::rustValidShadow(value, verifiedBoot);
 }
 void companion(int fd) {
     std::lock_guard singlePhone(companionMutex);
     OwnFd socket{fd}; timeout(fd, 12);
     OwnFd module{open(kModule, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
     if (module.value < 0) return;
+    const auto currentBoot = bootId();
     Json savedShadow, lastAck;
     int phonePid = 0, sdk = deviceSdk();
     bool identified = false;
@@ -235,7 +239,7 @@ void companion(int fd) {
         auto cached = initialData.value < 0 ? std::vector<uint8_t>{} : readAt(initialData.value, "global-shadow.json", 4096);
         Json shadow = cached.empty() ? Json{} : Json::parse(cached, nullptr, false);
         if (shadow.is_discarded()) shadow = Json{};
-        if (validShadow(shadow)) savedShadow = shadow;
+        if (validShadow(shadow, currentBoot)) savedShadow = shadow;
         auto pendingBytes = initialData.value < 0 ? std::vector<uint8_t>{} : readAt(initialData.value, "global-transaction.json", 8192);
         Json pending = pendingBytes.empty() ? Json{} : Json::parse(pendingBytes, nullptr, false);
         bool recovering = !pending.is_discarded() && pending.is_object() && pending.value("bootId", std::string()) == bootId();
@@ -247,7 +251,7 @@ void companion(int fd) {
             bool saved = false;
             bool prepared = false;
             auto phase = request.value("phase", std::string("snapshot"));
-            if (data.value >= 0 && request.contains("shadow") && validShadow(request["shadow"])) {
+            if (data.value >= 0 && request.contains("shadow") && validShadow(request["shadow"], currentBoot)) {
                 if (phase == "prepare") {
                     prepared = atomicAt(data.value, "global-transaction.json", Json{{"bootId", bootId()},
                         {"prior", savedShadow}, {"candidate", request["shadow"]}});
@@ -269,7 +273,7 @@ void companion(int fd) {
                 !marked(module.value, "update");
             auto runtime = active ? readAt(data.value, "runtime.json", kLimit) : std::vector<uint8_t>{};
             Json config = runtime.empty() || !haaru_json_valid(runtime.data(), runtime.size()) ? Json{} : Json::parse(runtime, nullptr, false);
-            if (config.is_discarded() || !validConfig(config)) config = Json{};
+            if (config.is_discarded() || !validConfig(config, currentBoot)) config = Json{};
             if (!sendJson(fd, Json{{"active", active && !config.empty()}, {"config", config}, {"hash", runtime.empty() ? "" : hash(runtime)},
                 {"shadowSaved", saved}, {"shadowPrepared", prepared}, {"recoveryRequired", recovering}})) {
                 transportError = "Companion response failed: " + std::string(std::strerror(errno));
@@ -375,12 +379,11 @@ void retainCompanionFd(JNIEnv* env, zygisk::Api* api, zygisk::AppSpecializeArgs*
     int fd = channel.load();
     channelIdentity = socketIdentity(fd);
     if (!channelIdentity.valid) throw std::runtime_error("Companion did not provide a connected Unix stream socket");
-    // Some API-compatible providers cannot report this result reliably. Request
-    // exemption, preserve the exposed zygote list, then verify the real socket
-    // after specialisation instead of accepting or failing on this bool alone.
+    // A provider that accepted the request manages the exemption itself. Only
+    // preserve the optional list directly when the provider did not accept it.
     fdExemptionReported = api->exemptFd(fd);
     fdIgnoreListAvailable = args->fds_to_ignore != nullptr;
-    if (!args->fds_to_ignore) return;
+    if (fdExemptionReported || !args->fds_to_ignore) return;
     auto prior = *args->fds_to_ignore;
     jsize count = prior ? env->GetArrayLength(prior) : 0;
     requireJni(env, count >= 0 && count <= 4096, "Invalid zygote FD retention list");
@@ -513,7 +516,7 @@ void setString(JNIEnv* env, jclass type, jstring key, jstring value) {
     candidate["revision"] = prior.at("revision").get<uint64_t>() + 1;
     candidate["published"] = false;
     Json reply;
-    bool saved = validShadow(candidate) && exchange(candidate,
+    bool saved = validShadow(candidate, phoneBootId()) && exchange(candidate,
         acknowledgement(false, static_cast<bool>(engineReady), false, "", "Natural SIM update is in progress"), reply, "prepare") && reply.value("shadowPrepared", false);
     if (!saved) engineReady = false;
     // Save a natural SIM change before any configured overlay is reapplied.
@@ -615,7 +618,7 @@ bool configure(JNIEnv* env, const Json& plan) {
 }
 Json shadowSnapshot() {
     std::lock_guard lock(stateMutex);
-    return Json{{"bootId", bootId()}, {"countryList", baseCountry}, {"nameList", baseName}, {"published", !published.empty()}, {"revision", baseRevision}};
+    return Json{{"bootId", phoneBootId()}, {"countryList", baseCountry}, {"nameList", baseName}, {"published", !published.empty()}, {"revision", baseRevision}};
 }
 std::vector<haaru::PropertyProfile> propertyPlan(const Json& plan) {
     std::vector<haaru::PropertyProfile> values;
@@ -660,7 +663,10 @@ std::optional<uint64_t> restore(JNIEnv* env, haaru::RestorePhase phase = haaru::
     }
     const bool restored = haaru::restoreGlobalState(phase, baselineReady,
         [&] { return configure(env, Json::array()); },
-        [&](size_t index) { return __system_property_set(kKeys[index], originals[index].c_str()) == 0; },
+        [&](size_t index) {
+            return (phase == haaru::RestorePhase::Bootstrap && readProperty(kKeys[index]) == originals[index]) ||
+                __system_property_set(kKeys[index], originals[index].c_str()) == 0;
+        },
         [&](size_t index) { return readProperty(kKeys[index]) == originals[index]; });
     if (!restored) return std::nullopt;
     return revision;
@@ -739,10 +745,10 @@ void engineLoop() {
             publication.unlock();
             auto hashValue = response.value("hash", std::string());
             Json plan = Json::array();
-            if (response.value("active", false) && response.contains("config") && validConfig(response["config"])) {
+            if (response.value("active", false) && response.contains("config") && validConfig(response["config"], phoneBootId())) {
                 auto& config = response["config"];
                 if (haaru::cacheAllowed(config.value("protocol", 0), config.value("readOnly", true),
-                        config.value("enabled", false), config.value("bootId", std::string()) == bootId())) plan = config["profiles"];
+                        config.value("enabled", false), config.value("bootId", std::string()) == phoneBootId())) plan = config["profiles"];
             }
             bool healthy = engineReady && guardsReady;
             if (healthy && healthId) {
@@ -849,8 +855,10 @@ void Module::preAppSpecialize(zygisk::AppSpecializeArgs* args) {
                 {"phonePid", getpid()}, {"sdk", deviceSdk()}}))
             throw std::runtime_error("Companion greeting failed");
         Json initial;
-        if (!readJson(channel, initial) || initial.value("bootId", std::string()) != bootId() || bootId().empty())
+        const auto localBoot = bootId();
+        if (!readJson(channel, initial) || localBoot.empty() || initial.value("bootId", std::string()) != localBoot)
             throw std::runtime_error("Companion boot identity mismatch");
+        verifiedPhoneBoot = localBoot;
         recoveryRequired = initial.value("recoveryRequired", false);
         uint32_t length = 0;
         if (!transfer(channel, &length, sizeof(length), false) || length < 112 || length > kDexLimit)
@@ -863,8 +871,8 @@ void Module::preAppSpecialize(zygisk::AppSpecializeArgs* args) {
         setStage("property-baseline");
         baseCountry = readProperty(kKeys[0]); baseName = readProperty(kKeys[1]);
         if (initial.contains("shadow") && initial["shadow"].is_object() &&
-                initial["shadow"].value("bootId", std::string()) == bootId()) {
-            if (!validShadow(initial["shadow"])) throw std::runtime_error("Unsafe original-value shadow");
+                initial["shadow"].value("bootId", std::string()) == phoneBootId()) {
+            if (!validShadow(initial["shadow"], phoneBootId())) throw std::runtime_error("Unsafe original-value shadow");
             baseCountry = initial["shadow"]["countryList"].get<std::string>();
             baseName = initial["shadow"]["nameList"].get<std::string>();
         }
@@ -918,15 +926,16 @@ void Module::preAppSpecialize(zygisk::AppSpecializeArgs* args) {
 void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
     if (!selected) return;
     try {
+        setStage("connection-validation");
+        if (!guardsReady || channel < 0) throw std::runtime_error("Required property guards or companion connection are unavailable");
+        validateRetainedCompanion();
         setStage("property-restore");
+        checkpoint();
         // The Java hook class has not been loaded at this stage.
         if (!restore(env, haaru::RestorePhase::Bootstrap)) throw std::runtime_error("Original property restoration failed");
         LocalFrame frame(env, 96);
         requireJni(env, frame.valid, "JNI frame unavailable");
         if (recoveryRequired) throw std::runtime_error("An interrupted SIM update requires a full phone reboot");
-        if (!guardsReady || channel < 0) throw std::runtime_error("Required property guards or companion connection are unavailable");
-        setStage("connection-validation");
-        validateRetainedCompanion();
         setStage("art-symbols");
         checkpoint();
         if (!art.initialize()) throw std::runtime_error(art.error());
@@ -1064,6 +1073,10 @@ void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
         return;
     } catch (const std::exception& failure) { recordJniFailure(env, failure.what()); }
     catch (...) { recordJniFailure(env, "Unknown phone post-specialization failure"); }
+    if (!connectionValidated) {
+        const auto stage = diagnostic().first;
+        __android_log_print(ANDROID_LOG_WARN, "HaaruEngine", "Phone bootstrap stopped at %s", stage.c_str());
+    }
     checkpoint();
     if (!started.exchange(true)) {
         try { std::thread(engineLoop).detach(); }

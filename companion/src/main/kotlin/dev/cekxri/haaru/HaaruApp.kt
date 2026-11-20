@@ -9,29 +9,20 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
@@ -93,9 +84,9 @@ internal fun HaaruApp(bridge: UiBridge, appearancePreferences: AppearancePrefere
     val preferenceEditable = foreground && appearanceState.editable && !state.snapshot.readOnly && !state.snapshot.upgradePending
     val scene = remember(context) { SculptureController(context) }
     val density = LocalDensity.current.density
-    val scrollOffsets = remember { FloatArray(4) }
     var sceneBounds by remember { mutableStateOf(Rect.Zero) }
-    val lists = List(3) { rememberLazyListState() }
+    val lists = List(4) { rememberLazyListState() }
+    val pageState = rememberSaveableStateHolder()
     val dark = when (preferences.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
         Appearance.DARK -> true
@@ -149,12 +140,18 @@ internal fun HaaruApp(bridge: UiBridge, appearancePreferences: AppearancePrefere
         CompositionLocalProvider(LocalHaaruReducedMotion provides reduced) {
             val colours = HaaruTheme.colours
             val backdrop = rememberLayerBackdrop()
+            val currentPage = page
+            val list = lists[currentPage]
             SideEffect {
-                scene.update(page, colours, reduced, foreground)
-                scene.scroll(scrollOffsets[page], density)
+                scene.update(currentPage, colours, reduced, foreground, list.sculptureScrollPx(), density)
+            }
+            LaunchedEffect(scene, currentPage, list, density) {
+                snapshotFlow { list.sculptureScrollPx() }.collect { offset ->
+                    if (page == currentPage) scene.scroll(currentPage, offset)
+                }
             }
             BoxWithConstraints(Modifier.fillMaxSize().background(colours.background)
-                .pointerInput(scene, sceneBounds) {
+                .pointerInput(scene, sceneBounds, currentPage) {
                     try { awaitPointerEventScope {
                         var following = false
                         while (true) {
@@ -183,98 +180,86 @@ internal fun HaaruApp(bridge: UiBridge, appearancePreferences: AppearancePrefere
                         .statusBarsPadding().width(if (expanded) visualWidth - 80.dp else visualWidth)
                         .height(if (expanded) 520.dp else 370.dp)
                         .onGloballyPositioned { sceneBounds = it.boundsInRoot() })
-                    AnimatedContent(page, modifier = Modifier.fillMaxSize().padding(start = workInset), label = "nativeSurface",
-                        transitionSpec = {
-                            val direction = if (targetState > initialState) 1 else -1
-                            if (reduced) EnterTransition.None togetherWith ExitTransition.None
-                            else slideInHorizontally(spring(dampingRatio = .86f, stiffness = 220f)) { direction * it / 3 } togetherWith
-                                slideOutHorizontally(spring(dampingRatio = .92f, stiffness = 240f)) { -direction * it / 4 }
-                        }) { currentPage ->
-                        if (currentPage == 3) {
-                            AboutPage(state.snapshot.moduleVersion, { page = 2 }) { offset ->
-                                scrollOffsets[3] = offset
-                                if (page == 3) scene.scroll(offset, density)
-                            }
-                        } else {
-                            val scrollConnection = remember(currentPage) {
-                                object : NestedScrollConnection {
-                                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                                        scrollOffsets[currentPage] = (scrollOffsets[currentPage] - consumed.y).coerceAtLeast(0f)
-                                        if (page == currentPage) scene.scroll(scrollOffsets[currentPage], density)
-                                        return Offset.Zero
-                                    }
-                                }
-                            }
-                            val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                            LazyColumn(state = lists[currentPage],
-                                modifier = Modifier.fillMaxSize().statusBarsPadding().imePadding().nestedScroll(scrollConnection),
-                                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp,
-                                    bottom = if (expanded) 30.dp + bottom else 104.dp + bottom),
-                                verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                                item("header") { NativePageHeader(currentPage, state, ::reread) }
-                                if (!expanded) item("sculpturalSpace") { Spacer(Modifier.height(192.dp)) }
-                                item("context") { PageContext(currentPage, state) }
-                                when (currentPage) {
-                                    0 -> {
-                                        if (state.notice.isNotBlank() && (state.fresh || !state.failed || state.notice.startsWith("設定已儲存")))
-                                            item("notice") { InlineNotice(state.notice, state.failed) }
-                                        if (state.fresh && state.snapshot.cards.isEmpty()) item("empty") {
-                                            HaaruCard(UiStyle.MIUIX) {
-                                                Text("沒有可用的 SIM", color = colours.onSurface, fontWeight = FontWeight.SemiBold)
-                                                Text("插入 SIM 後重新讀取，這裡會顯示可編輯的卡片。", color = colours.onSurfaceVariant)
-                                                HaaruButton(UiStyle.MIUIX, "重新讀取", !state.busy, secondary = true, onClick = ::reread)
-                                            }
+                    Box(Modifier.fillMaxSize().padding(start = workInset)) {
+                        pageState.SaveableStateProvider(currentPage) {
+                            if (currentPage == 3) {
+                                AboutPage(state.snapshot.moduleVersion, list) { page = 2 }
+                            } else {
+                                val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                                LazyColumn(state = list,
+                                    modifier = Modifier.fillMaxSize().statusBarsPadding().imePadding(),
+                                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp,
+                                        bottom = if (expanded) 30.dp + bottom else 104.dp + bottom),
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                                    item("hero") {
+                                        Column {
+                                            NativePageHeader(currentPage, state, ::reread)
+                                            if (!expanded) Spacer(Modifier.height(212.dp))
                                         }
-                                        if (state.snapshot.cards.isNotEmpty()) {
-                                            item("slots") {
-                                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                                    state.snapshot.cards.forEach { card ->
-                                                        val selected = selectedSlot == card.slot
-                                                        HaaruSimChip(selected, { selectedSlot = card.slot }) {
-                                                            Text("SIM ${card.slot + 1}", color = if (selected) colours.onPrimaryContainer else colours.onSurface,
-                                                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                                    }
+                                    item("context") { PageContext(currentPage, state) }
+                                    when (currentPage) {
+                                        0 -> {
+                                            if (state.notice.isNotBlank() && (state.fresh || !state.failed || state.notice.startsWith("設定已儲存")))
+                                                item("notice") { InlineNotice(state.notice, state.failed) }
+                                            if (state.fresh && state.snapshot.cards.isEmpty()) item("empty") {
+                                                HaaruCard(UiStyle.MIUIX) {
+                                                    Text("沒有可用的 SIM", color = colours.onSurface, fontWeight = FontWeight.SemiBold)
+                                                    Text("插入 SIM 後重新讀取，這裡會顯示可編輯的卡片。", color = colours.onSurfaceVariant)
+                                                    HaaruButton(UiStyle.MIUIX, "重新讀取", !state.busy, secondary = true, onClick = ::reread)
+                                                }
+                                            }
+                                            if (state.snapshot.cards.isNotEmpty()) {
+                                                item("slots") {
+                                                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                        state.snapshot.cards.forEach { card ->
+                                                            val selected = selectedSlot == card.slot
+                                                            HaaruSimChip(selected, { selectedSlot = card.slot }) {
+                                                                Text("SIM ${card.slot + 1}", color = if (selected) colours.onPrimaryContainer else colours.onSurface,
+                                                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
-                                            item("plan-$selectedSlot") {
-                                                state.snapshot.cards.firstOrNull { it.slot == selectedSlot }?.let { card ->
-                                                    SimPlanPanel(card, state,
-                                                        open = { title, options, selected, select -> picker = Picker(title, options, selected, select) },
-                                                        confirm = { title, message, action -> confirmation = Confirmation(title, message, action) })
+                                                item("plan-$selectedSlot") {
+                                                    state.snapshot.cards.firstOrNull { it.slot == selectedSlot }?.let { card ->
+                                                        SimPlanPanel(card, state,
+                                                            open = { title, options, selected, select -> picker = Picker(title, options, selected, select) },
+                                                            confirm = { title, message, action -> confirmation = Confirmation(title, message, action) })
+                                                    }
+                                                }
+                                                item("scope") {
+                                                    Text("只改變系統回報的 SIM 地區與電信商名稱。", color = colours.onSurfaceVariant,
+                                                        fontSize = 13.sp, lineHeight = 19.sp)
                                                 }
                                             }
-                                            item("scope") {
-                                                Text("只改變系統回報的 SIM 地區與電信商名稱。", color = colours.onSurfaceVariant,
-                                                    fontSize = 13.sp, lineHeight = 19.sp)
+                                        }
+                                        1 -> {
+                                            if (state.notice.isNotBlank()) item("notice") { InlineNotice(state.notice, state.failed) }
+                                            item("tools") {
+                                                ToolsPanel(state, preferenceNotice.takeIf { appearanceState.phase == PreferencePhase.SAVE_FAILED }.orEmpty()) { title, message, action ->
+                                                    confirmation = Confirmation(title, message, action)
+                                                }
                                             }
                                         }
-                                    }
-                                    1 -> {
-                                        if (state.notice.isNotBlank()) item("notice") { InlineNotice(state.notice, state.failed) }
-                                        item("tools") {
-                                            ToolsPanel(state, preferenceNotice.takeIf { appearanceState.phase == PreferencePhase.SAVE_FAILED }.orEmpty()) { title, message, action ->
-                                                confirmation = Confirmation(title, message, action)
+                                        2 -> {
+                                            item("appearance") {
+                                                AppearancePanel(preferences, preferenceEditable,
+                                                    onAppearance = { picker = Picker("明暗", Appearance.entries.map { it.name to appearanceName(it) },
+                                                        preferences.appearance.name) { key -> update { it.copy(appearance = Appearance.valueOf(key)) } } },
+                                                    onStyle = { picker = Picker("色彩風格", ColourStyle.entries.map { it.name to colourStyleName(it) },
+                                                        preferences.colourStyle.name) { key -> update { it.copy(colourStyle = ColourStyle.valueOf(key)) } } },
+                                                    onPalette = { colourPicker = true }, onUpdate = ::update)
                                             }
-                                        }
-                                    }
-                                    2 -> {
-                                        item("appearance") {
-                                            AppearancePanel(preferences, preferenceEditable,
-                                                onAppearance = { picker = Picker("明暗", Appearance.entries.map { it.name to appearanceName(it) },
-                                                    preferences.appearance.name) { key -> update { it.copy(appearance = Appearance.valueOf(key)) } } },
-                                                onStyle = { picker = Picker("色彩風格", ColourStyle.entries.map { it.name to colourStyleName(it) },
-                                                    preferences.colourStyle.name) { key -> update { it.copy(colourStyle = ColourStyle.valueOf(key)) } } },
-                                                onPalette = { colourPicker = true }, onUpdate = ::update)
-                                        }
-                                        if (preferenceNotice.isNotEmpty()) item("preferenceNotice") {
-                                            Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
-                                                InlineNotice(preferenceNotice, preferenceFailure)
-                                                if (preferenceFailure) HaaruTextButton(::reread) { Text("重新讀取") }
+                                            if (preferenceNotice.isNotEmpty()) item("preferenceNotice") {
+                                                Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+                                                    InlineNotice(preferenceNotice, preferenceFailure)
+                                                    if (preferenceFailure) HaaruTextButton(::reread) { Text("重新讀取") }
+                                                }
                                             }
+                                            item("about") { AboutInformation(state.snapshot.moduleVersion) { page = 3 } }
                                         }
-                                        item("about") { AboutInformation(state.snapshot.moduleVersion) { page = 3 } }
                                     }
                                 }
                             }
@@ -302,6 +287,11 @@ internal fun HaaruApp(bridge: UiBridge, appearancePreferences: AppearancePrefere
         }
     }
 }
+
+// The first item owns the full hero (header and stage). Once it leaves the
+// viewport, later item heights and fling deltas have no bearing on the scene.
+private fun LazyListState.sculptureScrollPx(): Float =
+    if (firstVisibleItemIndex == 0) firstVisibleItemScrollOffset.toFloat() else Float.POSITIVE_INFINITY
 
 @Composable
 private fun NativePageHeader(page: Int, state: HaaruState, reread: () -> Unit) {
