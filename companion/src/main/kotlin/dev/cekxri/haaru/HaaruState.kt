@@ -258,6 +258,8 @@ internal fun friendlyError(raw: String): String = when {
 internal fun friendlyEngineError(raw: String): String = when {
     raw.contains("Combined SIM operator names exceed", true) ->
         "多張卡的電信商名稱總長超出系統限制，請縮短自訂名稱再套用。"
+    raw.contains("without an FD retention path", true) ->
+        "電話程序啟動時未能保留 Zygisk 連線。請在工具頁查看診斷。"
     raw.contains("post-specialisation validation", true) || raw.contains("did not survive process specialisation", true) ->
         "電話引擎在初始化時失去模組連線。請到工具頁查看詳細狀態。"
     raw.contains("disconnect", true) -> "電話引擎尚未連上，請到工具頁查看原因。"

@@ -1,5 +1,15 @@
 # 更新紀錄 / Changes
 
+## 0.8.3 — 公開預覽 / Public preview
+
+- 恢復分頁進場動畫。待離開的頁面立即退出，目的頁短距離滑入。3D 雕塑使用連續的阻尼運動，即使轉場途中再切頁也會保留速度。
+- 調低淺色模式的背景、卡片及底欄亮度，保留文字對比與玻璃質感。
+- 新增 Zygisk FD 保留路徑不可用的診斷分類。受影響手機的電話引擎相容性仍待查明。
+
+- Restored tab entrance motion and gave sculpture morphs and parallax continuous, damped movement during rapid navigation.
+- Muted the light background, cards and dock while preserving text contrast and glass detail.
+- Added a diagnostic category for early Zygisk disconnects without an available FD retention path. Phone engine compatibility on the affected handset is still unresolved.
+
 ## 0.8.2 — 公開預覽 / Public preview
 
 - 切頁時只顯示目的頁；3D 雕塑保留跨頁變形並跟隨目前頁面的捲動位置。亮色背景降低亮度，和卡片形成清楚層次。

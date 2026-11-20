@@ -179,6 +179,14 @@ int main() {
     check(earlyDisconnect["error"] == "Phone companion disconnected before post-specialisation validation" &&
         earlyDisconnect["fdExemptionReported"] == true && earlyDisconnect["fdIgnoreListAvailable"] == false &&
         earlyDisconnect["initialized"] == false, "early EOF records retention evidence without confirming bootstrap");
+    pending["fdExemptionReported"] = false;
+    auto noRetention = haaru::disconnectedAck(pending, 36, "fixture-boot", 123459, 2870);
+    check(noRetention["error"] == "Phone companion disconnected during specialisation without an FD retention path" &&
+        !noRetention["connected"].get<bool>(), "classify a disconnect when neither retention path was available");
+    pending.erase("fdIgnoreListAvailable");
+    auto unknownRetention = haaru::disconnectedAck(pending, 36, "fixture-boot", 123459, 2870);
+    check(unknownRetention["error"] == "Phone companion disconnected before post-specialisation validation",
+        "missing retention metadata remains distinct from a measured false");
     auto healthy = haaru::engineAck(true, true, true, 14, 36, "fixture-boot", "hash-8", 123458, 2870, "runtime", "", 14, true, true, true);
     for (int discovered : {3, 7, 19}) {
         auto adaptive = haaru::engineAck(true, true, true, discovered, 29, "fixture-boot", "hash-8", 123458, 2870, "runtime", "", discovered, true, true, true);

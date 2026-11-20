@@ -1,12 +1,12 @@
 # Framework compatibility
 
-0.8.1 is a public preview that continues the native design published in 0.8.0. In the 0.8.0 checks, an Android API 33 emulator accelerated by an RTX 3060 compiled the scene shaders and rendered all four screens in a GLES 3.1 context. Handset frame timing and production phone engine validation are pending.
+Haaru 0.8.x is a public preview that continues the native design published in 0.8.0. In the 0.8.0 checks, an Android API 33 emulator accelerated by an RTX 3060 compiled the scene shaders and rendered all four screens in a GLES 3.1 context. Handset frame timing and production phone engine validation are pending.
 
 Haaru reads the device's own Android interfaces. Production code has no phone model, manufacturer, SIM country, carrier label, subscription ID, or process ID exceptions.
 
 The native engine still requires a working Zygisk API 4 provider, usable ART/LSPlant hooks, the Android phone service process, and the guarded SystemProperties methods. Android 10 is the minimum API, rather than a promise that every vendor framework implements the same interfaces.
 
-The engine preserves the original file-descriptor list and verifies the same socket and protocol after specialisation. An `exemptFd` API result alone does not establish whether the socket survived. A failed socket or protocol check remains a concrete engine failure.
+The engine preserves the original file-descriptor list and verifies the same socket and protocol after specialisation. An `exemptFd` API result alone does not establish whether the socket survived. If the companion disconnects during specialisation and neither retention route was available, the engine reports `startup-fd-retention-unavailable`. Diagnosing compatibility on that device requires the active provider name and version. An unavailable companion stays unconfirmed.
 
 ## Native interface
 

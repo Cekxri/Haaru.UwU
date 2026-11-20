@@ -9,6 +9,9 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +25,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -37,6 +42,8 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -142,7 +149,18 @@ internal fun HaaruApp(bridge: UiBridge, appearancePreferences: AppearancePrefere
             val backdrop = rememberLayerBackdrop()
             val currentPage = page
             val list = lists[currentPage]
+            var presentedPage by remember { mutableIntStateOf(currentPage) }
+            val previousPage = remember(currentPage) { presentedPage }
+            val direction = if (currentPage > previousPage) 1f else -1f
+            val layoutDirection = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
+            val entrance = remember(currentPage) { Animatable(if (currentPage == previousPage || reduced) 1f else 0f) }
+            LaunchedEffect(entrance, reduced) {
+                if (reduced) entrance.snapTo(1f)
+                else if (entrance.value < 1f) entrance.animateTo(1f,
+                    tween(340, easing = CubicBezierEasing(.18f, .72f, .25f, 1f)))
+            }
             SideEffect {
+                presentedPage = currentPage
                 scene.update(currentPage, colours, reduced, foreground, list.sculptureScrollPx(), density)
             }
             LaunchedEffect(scene, currentPage, list, density) {
@@ -180,85 +198,92 @@ internal fun HaaruApp(bridge: UiBridge, appearancePreferences: AppearancePrefere
                         .statusBarsPadding().width(if (expanded) visualWidth - 80.dp else visualWidth)
                         .height(if (expanded) 520.dp else 370.dp)
                         .onGloballyPositioned { sceneBounds = it.boundsInRoot() })
-                    Box(Modifier.fillMaxSize().padding(start = workInset)) {
-                        pageState.SaveableStateProvider(currentPage) {
-                            if (currentPage == 3) {
-                                AboutPage(state.snapshot.moduleVersion, list) { page = 2 }
-                            } else {
-                                val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                                LazyColumn(state = list,
-                                    modifier = Modifier.fillMaxSize().statusBarsPadding().imePadding(),
-                                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp,
-                                        bottom = if (expanded) 30.dp + bottom else 104.dp + bottom),
-                                    verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                                    item("hero") {
-                                        Column {
-                                            NativePageHeader(currentPage, state, ::reread)
-                                            if (!expanded) Spacer(Modifier.height(212.dp))
-                                        }
-                                    }
-                                    item("context") { PageContext(currentPage, state) }
-                                    when (currentPage) {
-                                        0 -> {
-                                            if (state.notice.isNotBlank() && (state.fresh || !state.failed || state.notice.startsWith("設定已儲存")))
-                                                item("notice") { InlineNotice(state.notice, state.failed) }
-                                            if (state.fresh && state.snapshot.cards.isEmpty()) item("empty") {
-                                                HaaruCard(UiStyle.MIUIX) {
-                                                    Text("沒有可用的 SIM", color = colours.onSurface, fontWeight = FontWeight.SemiBold)
-                                                    Text("插入 SIM 後重新讀取，這裡會顯示可編輯的卡片。", color = colours.onSurfaceVariant)
-                                                    HaaruButton(UiStyle.MIUIX, "重新讀取", !state.busy, secondary = true, onClick = ::reread)
-                                                }
+                    Box(Modifier.fillMaxSize().padding(start = workInset).clipToBounds()) {
+                        Box(Modifier.fillMaxSize().graphicsLayer {
+                            val distance = if (reduced) 0f else 1f - entrance.value
+                            translationX = direction * layoutDirection * 18.dp.toPx() * distance
+                            translationY = 4.dp.toPx() * distance
+                            alpha = 1f - .58f * distance
+                        }) {
+                            pageState.SaveableStateProvider(currentPage) {
+                                if (currentPage == 3) {
+                                    AboutPage(state.snapshot.moduleVersion, list) { page = 2 }
+                                } else {
+                                    val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                                    LazyColumn(state = list,
+                                        modifier = Modifier.fillMaxSize().statusBarsPadding().imePadding(),
+                                        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp,
+                                            bottom = if (expanded) 30.dp + bottom else 104.dp + bottom),
+                                        verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                                        item("hero") {
+                                            Column {
+                                                NativePageHeader(currentPage, state, ::reread)
+                                                if (!expanded) Spacer(Modifier.height(212.dp))
                                             }
-                                            if (state.snapshot.cards.isNotEmpty()) {
-                                                item("slots") {
-                                                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                                        state.snapshot.cards.forEach { card ->
-                                                            val selected = selectedSlot == card.slot
-                                                            HaaruSimChip(selected, { selectedSlot = card.slot }) {
-                                                                Text("SIM ${card.slot + 1}", color = if (selected) colours.onPrimaryContainer else colours.onSurface,
-                                                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                                        }
+                                        item("context") { PageContext(currentPage, state) }
+                                        when (currentPage) {
+                                            0 -> {
+                                                if (state.notice.isNotBlank() && (state.fresh || !state.failed || state.notice.startsWith("設定已儲存")))
+                                                    item("notice") { InlineNotice(state.notice, state.failed) }
+                                                if (state.fresh && state.snapshot.cards.isEmpty()) item("empty") {
+                                                    HaaruCard(UiStyle.MIUIX) {
+                                                        Text("沒有可用的 SIM", color = colours.onSurface, fontWeight = FontWeight.SemiBold)
+                                                        Text("插入 SIM 後重新讀取，這裡會顯示可編輯的卡片。", color = colours.onSurfaceVariant)
+                                                        HaaruButton(UiStyle.MIUIX, "重新讀取", !state.busy, secondary = true, onClick = ::reread)
+                                                    }
+                                                }
+                                                if (state.snapshot.cards.isNotEmpty()) {
+                                                    item("slots") {
+                                                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                            state.snapshot.cards.forEach { card ->
+                                                                val selected = selectedSlot == card.slot
+                                                                HaaruSimChip(selected, { selectedSlot = card.slot }) {
+                                                                    Text("SIM ${card.slot + 1}", color = if (selected) colours.onPrimaryContainer else colours.onSurface,
+                                                                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                                                                }
                                                             }
                                                         }
                                                     }
-                                                }
-                                                item("plan-$selectedSlot") {
-                                                    state.snapshot.cards.firstOrNull { it.slot == selectedSlot }?.let { card ->
-                                                        SimPlanPanel(card, state,
-                                                            open = { title, options, selected, select -> picker = Picker(title, options, selected, select) },
-                                                            confirm = { title, message, action -> confirmation = Confirmation(title, message, action) })
+                                                    item("plan-$selectedSlot") {
+                                                        state.snapshot.cards.firstOrNull { it.slot == selectedSlot }?.let { card ->
+                                                            SimPlanPanel(card, state,
+                                                                open = { title, options, selected, select -> picker = Picker(title, options, selected, select) },
+                                                                confirm = { title, message, action -> confirmation = Confirmation(title, message, action) })
+                                                        }
+                                                    }
+                                                    item("scope") {
+                                                        Text("只改變系統回報的 SIM 地區與電信商名稱。", color = colours.onSurfaceVariant,
+                                                            fontSize = 13.sp, lineHeight = 19.sp)
                                                     }
                                                 }
-                                                item("scope") {
-                                                    Text("只改變系統回報的 SIM 地區與電信商名稱。", color = colours.onSurfaceVariant,
-                                                        fontSize = 13.sp, lineHeight = 19.sp)
+                                            }
+                                            1 -> {
+                                                if (state.notice.isNotBlank()) item("notice") { InlineNotice(state.notice, state.failed) }
+                                                item("tools") {
+                                                    ToolsPanel(state, preferenceNotice.takeIf { appearanceState.phase == PreferencePhase.SAVE_FAILED }.orEmpty()) { title, message, action ->
+                                                        confirmation = Confirmation(title, message, action)
+                                                    }
                                                 }
                                             }
-                                        }
-                                        1 -> {
-                                            if (state.notice.isNotBlank()) item("notice") { InlineNotice(state.notice, state.failed) }
-                                            item("tools") {
-                                                ToolsPanel(state, preferenceNotice.takeIf { appearanceState.phase == PreferencePhase.SAVE_FAILED }.orEmpty()) { title, message, action ->
-                                                    confirmation = Confirmation(title, message, action)
+                                            2 -> {
+                                                item("appearance") {
+                                                    AppearancePanel(preferences, preferenceEditable,
+                                                        onAppearance = { picker = Picker("明暗", Appearance.entries.map { it.name to appearanceName(it) },
+                                                            preferences.appearance.name) { key -> update { it.copy(appearance = Appearance.valueOf(key)) } } },
+                                                        onStyle = { picker = Picker("色彩風格", ColourStyle.entries.map { it.name to colourStyleName(it) },
+                                                            preferences.colourStyle.name) { key -> update { it.copy(colourStyle = ColourStyle.valueOf(key)) } } },
+                                                        onPalette = { colourPicker = true }, onUpdate = ::update)
                                                 }
-                                            }
-                                        }
-                                        2 -> {
-                                            item("appearance") {
-                                                AppearancePanel(preferences, preferenceEditable,
-                                                    onAppearance = { picker = Picker("明暗", Appearance.entries.map { it.name to appearanceName(it) },
-                                                        preferences.appearance.name) { key -> update { it.copy(appearance = Appearance.valueOf(key)) } } },
-                                                    onStyle = { picker = Picker("色彩風格", ColourStyle.entries.map { it.name to colourStyleName(it) },
-                                                        preferences.colourStyle.name) { key -> update { it.copy(colourStyle = ColourStyle.valueOf(key)) } } },
-                                                    onPalette = { colourPicker = true }, onUpdate = ::update)
-                                            }
-                                            if (preferenceNotice.isNotEmpty()) item("preferenceNotice") {
-                                                Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
-                                                    InlineNotice(preferenceNotice, preferenceFailure)
-                                                    if (preferenceFailure) HaaruTextButton(::reread) { Text("重新讀取") }
+                                                if (preferenceNotice.isNotEmpty()) item("preferenceNotice") {
+                                                    Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+                                                        InlineNotice(preferenceNotice, preferenceFailure)
+                                                        if (preferenceFailure) HaaruTextButton(::reread) { Text("重新讀取") }
+                                                    }
                                                 }
+                                                item("about") { AboutInformation(state.snapshot.moduleVersion) { page = 3 } }
                                             }
-                                            item("about") { AboutInformation(state.snapshot.moduleVersion) { page = 3 } }
                                         }
                                     }
                                 }

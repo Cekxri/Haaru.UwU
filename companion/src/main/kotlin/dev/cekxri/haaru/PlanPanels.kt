@@ -306,6 +306,7 @@ internal fun shareableDiagnostics(raw: String, appearanceIssue: Boolean): String
     val stage = (engine?.get("stage") as? JsonPrimitive)?.contentOrNull
     val error = (engine?.get("error") as? JsonPrimitive)?.contentOrNull.orEmpty()
     val errorKind = when {
+        error.contains("without an FD retention path", ignoreCase = true) -> "startup-fd-retention-unavailable"
         error.contains("post-specialisation validation") || error.contains("did not survive process specialisation") -> "startup-disconnect"
         error.contains("round-trip failed") -> "startup-round-trip-failed"
         error.contains("disconnected", ignoreCase = true) -> "disconnected"

@@ -22,6 +22,7 @@ class CafeColourContrastTest {
                 assertTrue("$seed/$style/$dark main text", contrast(c.onSurface, surface) >= 4.5f)
                 assertTrue("$seed/$style/$dark secondary text", contrast(c.onSurfaceVariant, surface) >= 4.5f)
             }
+            assertTrue(contrast(c.error, c.background) >= 3f)
             assertTrue(contrast(c.onPrimary, c.primary) >= 4.5f)
             assertTrue(contrast(c.onPrimaryContainer, c.primaryContainer) >= 4.5f)
             assertTrue(contrast(c.onSecondaryContainer, c.secondaryContainer) >= 4.5f)
@@ -31,7 +32,7 @@ class CafeColourContrastTest {
     @Test fun lightModeSeparatesTheMutedGroundFromTheCards() {
         for (style in ColourStyle.entries) {
             val colours = cafeColours(manualColours(false, Color(0xFF7E57C2), style), false)
-            assertTrue(colours.background.luminance() <= .70f)
+            assertTrue(colours.background.luminance() <= .48f)
             assertTrue(colours.surface.luminance() - colours.background.luminance() >= .07f)
         }
     }

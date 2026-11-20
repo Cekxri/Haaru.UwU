@@ -84,7 +84,7 @@ import kotlin.math.sign
 internal fun LiquidNavigation(backdrop: Backdrop, selected: Int, glass: Boolean,
                               reduced: Boolean, onSelect: (Int) -> Unit) {
     val colours = HaaruTheme.colours
-    val light = colours.background.luminance() >= .35f
+    val light = colours.background.luminance() >= .30f
     val liquid = glass && isRuntimeShaderSupported()
     val committed = selected.coerceIn(0, 2)
     val selectedNow by rememberUpdatedState(committed)
@@ -93,7 +93,7 @@ internal fun LiquidNavigation(backdrop: Backdrop, selected: Int, glass: Boolean,
     val scope = rememberCoroutineScope()
     val tabsBackdrop = rememberLayerBackdrop()
     val combinedBackdrop = rememberCombinedBackdrop(backdrop, tabsBackdrop)
-    val containerColour = colours.surfaceContainerHigh.copy(alpha = if (light) .66f else .62f)
+    val containerColour = colours.surfaceContainerHigh.copy(alpha = if (light) .76f else .62f)
 
     BoxWithConstraints(Modifier.widthIn(max = 420.dp).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
         val density = LocalDensity.current

@@ -56,8 +56,13 @@ inline nlohmann::json disconnectedAck(const nlohmann::json& prior, int sdk, std:
         if (prior.contains("error") && prior["error"].is_string() && !prior["error"].get_ref<const std::string&>().empty())
             error = prior["error"].get<std::string>();
     }
-    if (stage == "specialization" && error == "Phone engine disconnected")
-        error = "Phone companion disconnected before post-specialisation validation";
+    if (stage == "specialization" && error == "Phone engine disconnected") {
+        const bool exemptionUnavailable = prior.contains("fdExemptionReported") && prior["fdExemptionReported"] == false;
+        const bool ignoreListUnavailable = prior.contains("fdIgnoreListAvailable") && prior["fdIgnoreListAvailable"] == false;
+        error = exemptionUnavailable && ignoreListUnavailable ?
+            "Phone companion disconnected during specialisation without an FD retention path" :
+            "Phone companion disconnected before post-specialisation validation";
+    }
     auto result = engineAck(false, false, false, hooks, sdk, boot, hash, timestamp, phonePid, stage, error);
     for (const char* key : {"requiredHooks", "supportsCountry", "supportsCarrierName",
             "fdExemptionReported", "fdIgnoreListAvailable"})

@@ -17,6 +17,7 @@ import android.util.Log
 import android.view.Choreographer
 import android.view.Surface
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -172,8 +173,7 @@ internal class SculptureRenderer(
     private val inverseModel = FloatArray(16)
     private val normalModel = FloatArray(16)
     private val weights = floatArrayOf(1f, 0f, 0f, 0f)
-    private val morphOrigin = weights.copyOf()
-    private var morphTime = .55f
+    private val poseLead = weights.copyOf()
     private val material = FloatArray(4)
     private val baseColour = FloatArray(3)
     private var time = 0f
@@ -183,6 +183,7 @@ internal class SculptureRenderer(
     private var pitchVelocity = 0f
     private var press = 0f
     private var scroll = 0f
+    private var scrollLead = 0f
     private var frames = 0L
     private var draws = 0L
     private var lastFrame = 0L
@@ -287,7 +288,7 @@ internal class SculptureRenderer(
         if (closed) return
         val wasVisible = visible()
         val wasReduced = input.reduced
-        val pageChanged = value.page != input.page
+        val wasParked = input.scrollPx >= scrollCutoff()
         val wasPowerLimited = input.powerSave || input.thermal >= PowerManager.THERMAL_STATUS_MODERATE
         if (!value.reduced && lastPressed && value.pressed) {
             yawVelocity = (yawVelocity + (value.pointerX - lastPointerX) * 15f).coerceIn(-4f, 4f)
@@ -305,17 +306,19 @@ internal class SculptureRenderer(
             }.onFailure { Log.w("HaaruSculpture", "Surface frame-rate request unavailable: " + it.message.orEmpty().take(200)) }
             surfaceRequestedHz = surfaceRate
         }
-        if (pageChanged) {
-            weights.copyInto(morphOrigin)
-            morphTime = 0f
-            yawVelocity = 0f; pitchVelocity = 0f; press = 0f
-        }
         if (value.reduced) {
             for (index in weights.indices) weights[index] = if (index == value.page) 1f else 0f
-            morphTime = .55f
+            weights.copyInto(poseLead)
             yaw = 0f; pitch = 0f; yawVelocity = 0f; pitchVelocity = 0f; press = 0f
         }
-        if (value.reduced || pageChanged || !wasVisible) scroll = value.scrollPx.coerceAtMost(heightPx * 1.18f)
+        if (value.reduced || !wasVisible) {
+            val targetScroll = boundedScroll()
+            // Start a returning hero below the cutoff so it can travel into view.
+            if (value.reduced || !(wasParked && targetScroll < scrollCutoff())) {
+                scroll = targetScroll
+            }
+            scrollLead = scroll
+        }
         val requiredTier = when {
             value.thermal >= PowerManager.THERMAL_STATUS_SEVERE || value.lowRam -> 2
             value.reduced && !value.powerSave && value.thermal < PowerManager.THERMAL_STATUS_MODERATE -> 0
@@ -357,8 +360,11 @@ internal class SculptureRenderer(
             "; scrollPx=" + input.scrollPx + "; cacheClears=" + cacheClears)
     }
 
+    private fun scrollCutoff(): Float = heightPx * 1.18f
+    private fun boundedScroll(): Float = input.scrollPx.coerceIn(0f, scrollCutoff())
+
     private fun visible(): Boolean = !closed && input.palette != null && input.active && input.foreground &&
-        input.attached && input.scrollPx < heightPx * 1.18f
+        input.attached && (input.scrollPx < scrollCutoff() || (!input.reduced && scroll < scrollCutoff() - .5f))
 
     private fun requestFrame() {
         if (!queued && visible()) { queued = true; choreographer.postFrameCallback(this) }
@@ -441,7 +447,10 @@ internal class SculptureRenderer(
             stopWithFailure(failure)
             return
         }
-        if (!input.reduced) requestFrame()
+        if (!visible()) {
+            clearOffscreenCache()
+            publish(false)
+        } else if (!input.reduced) requestFrame()
     }
 
     private fun integrate(dt: Float) {
@@ -449,16 +458,16 @@ internal class SculptureRenderer(
         val steps = max(1, (dt / .008f).toInt())
         val step = dt / steps
         repeat(steps) {
-            if (morphTime < .55f) {
-                morphTime = (morphTime + step).coerceAtMost(.55f)
-                val t = morphTime / .55f
-                // The blend remains inside the four poses even when a new tab
-                // interrupts a morph. Restart from the geometry actually drawn.
-                val mix = t * t * (3f - 2f * t)
-                for (index in weights.indices) {
-                    val target = if (index == input.page) 1f else 0f
-                    weights[index] = morphOrigin[index] + (target - morphOrigin[index]) * mix
-                }
+            // Two coupled exponential stages form a critically damped spring.
+            // Retargeting keeps both pose and velocity continuous, and the
+            // shared coefficients keep the pose weights inside the simplex.
+            val poseTime = step * 11f
+            val poseDecay = exp(-poseTime)
+            for (index in weights.indices) {
+                val target = if (index == input.page) 1f else 0f
+                val leadError = poseLead[index] - target
+                weights[index] = target + (weights[index] - target + leadError * poseTime) * poseDecay
+                poseLead[index] = target + leadError * poseDecay
             }
             val targetYaw = if (input.pressed) (input.pointerX - .67f) * 1.2f else 0f
             val targetPitch = if (input.pressed) (input.pointerY - .51f) * .70f else 0f
@@ -467,7 +476,12 @@ internal class SculptureRenderer(
             yaw = (yaw + yawVelocity * step).coerceIn(-.9f, .9f)
             pitch = (pitch + pitchVelocity * step).coerceIn(-.65f, .65f)
             press += ((if (input.pressed) 1f else 0f) - press) * min(1f, step * 13f)
-            scroll += (input.scrollPx.coerceAtMost(heightPx * 1.18f) - scroll) * min(1f, step * 15f)
+            val scrollTarget = boundedScroll()
+            val scrollTime = step * 25f
+            val scrollDecay = exp(-scrollTime)
+            val scrollError = scrollLead - scrollTarget
+            scroll = scrollTarget + (scroll - scrollTarget + scrollError * scrollTime) * scrollDecay
+            scrollLead = scrollTarget + scrollError * scrollDecay
         }
     }
 
@@ -532,7 +546,13 @@ internal class SculptureRenderer(
         if (tier < 2) drawDepthOfField(depthShader)
     }
 
-    private fun mainTransmission(): Float = .90f * weights[0] + .68f * weights[2]
+    private fun mainTransmission(): Float {
+        val palette = checkNotNull(input.palette)
+        val softDaylight = palette.surface[1] > .30f
+        val home = if (softDaylight) .69f else .86f
+        val settings = if (softDaylight) .44f else .62f
+        return home * weights[0] + settings * weights[2]
+    }
 
     private fun drawTransparent(index: Int, surfaceShader: SculptureProgram, depthShader: SculptureProgram,
                                 sceneTarget: SculptureTarget, backTarget: SculptureTarget, encoding: Int) {
@@ -635,7 +655,7 @@ internal class SculptureRenderer(
             0 -> {
                 material[0] = weights[1] * .91f + weights[3] * .03f
                 material[1] = .13f * weights[0] + .23f * weights[1] + .43f * weights[2] + .40f * weights[3]
-                material[2] = .90f * weights[0] + .68f * weights[2]
+                material[2] = mainTransmission()
                 material[3] = 1.46f
             }
             1 -> { material[0] = .86f; material[1] = .24f; material[2] = 0f; material[3] = 1.45f }
