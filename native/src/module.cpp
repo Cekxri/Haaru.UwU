@@ -25,6 +25,7 @@
 #include <cstring>
 #include <mutex>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -529,8 +530,10 @@ void setString(JNIEnv* env, jclass type, jstring key, jstring value) {
             if (!configure(env, Json::array())) engineReady = false;
         }
         // A natural update invalidates the complete snapshot, including the other key.
-        if (__system_property_set(kKeys[0], country.c_str()) || __system_property_set(kKeys[1], name.c_str()) ||
-                readProperty(kKeys[0]) != country || readProperty(kKeys[1]) != name) engineReady = false;
+        const bool countryWritten = __system_property_set(kKeys[0], country.c_str()) == 0;
+        const bool nameWritten = __system_property_set(kKeys[1], name.c_str()) == 0;
+        if (!countryWritten || !nameWritten || readProperty(kKeys[0]) != country || readProperty(kKeys[1]) != name)
+            engineReady = false;
         Json committed = shadowSnapshot();
         bool acknowledged = saved && exchange(committed,
             acknowledgement(false, static_cast<bool>(engineReady), false, "", "Natural SIM update is waiting for publication"), reply, "commit") && reply.value("shadowSaved", false);
@@ -574,13 +577,23 @@ void enterOriginal(JNIEnv*, jclass, jboolean entering) {
 bool configure(JNIEnv* env, const Json& plan) {
     if (!hooksType || !configureId) return false;
     LocalFrame frame(env);
-    if (!frame.valid) return false;
+    if (!frame.valid) { recordJniFailure(env, "Cannot allocate central profile frame"); return false; }
+    auto allocated = [&](jobject reference) {
+        if (reference && !env->ExceptionCheck()) return true;
+        recordJniFailure(env, "Cannot allocate central profile arrays");
+        return false;
+    };
     jsize size = static_cast<jsize>(plan.size());
     auto strings = env->FindClass("java/lang/String");
-    auto ids = env->NewIntArray(size), slots = env->NewIntArray(size);
-    auto countries = strings ? env->NewObjectArray(size, strings, nullptr) : nullptr;
-    auto names = strings ? env->NewObjectArray(size, strings, nullptr) : nullptr;
-    if (!ids || !slots || !countries || !names || env->ExceptionCheck()) { recordJniFailure(env, "Cannot allocate central profile arrays"); return false; }
+    if (!allocated(strings)) return false;
+    auto ids = env->NewIntArray(size);
+    if (!allocated(ids)) return false;
+    auto slots = env->NewIntArray(size);
+    if (!allocated(slots)) return false;
+    auto countries = env->NewObjectArray(size, strings, nullptr);
+    if (!allocated(countries)) return false;
+    auto names = env->NewObjectArray(size, strings, nullptr);
+    if (!allocated(names)) return false;
     std::vector<jint> idValues, slotValues;
     for (jsize i = 0; i < size; i++) {
         idValues.push_back(plan[i].at("subId").get<int>()); slotValues.push_back(plan[i].at("slot").get<int>());
@@ -590,7 +603,12 @@ bool configure(JNIEnv* env, const Json& plan) {
         env->SetObjectArrayElement(countries, i, country); env->SetObjectArrayElement(names, i, name);
         env->DeleteLocalRef(country); env->DeleteLocalRef(name);
     }
-    env->SetIntArrayRegion(ids, 0, size, idValues.data()); env->SetIntArrayRegion(slots, 0, size, slotValues.data());
+    if (size > 0) {
+        env->SetIntArrayRegion(ids, 0, size, idValues.data());
+        if (env->ExceptionCheck()) { recordJniFailure(env, "Cannot encode central profile IDs"); return false; }
+        env->SetIntArrayRegion(slots, 0, size, slotValues.data());
+        if (env->ExceptionCheck()) { recordJniFailure(env, "Cannot encode central profile slots"); return false; }
+    }
     env->CallStaticVoidMethod(hooksType, configureId, ids, slots, countries, names);
     if (env->ExceptionCheck()) { recordJniFailure(env, "Central profile configuration failed"); return false; }
     return true;
@@ -629,15 +647,28 @@ bool propertiesMatch(const Json& plan) {
             readProperty(kKeys[1]) == haaru::overlayProperty(name, values, false);
     } catch (...) { return false; }
 }
-bool restore(JNIEnv* env) {
-    if (hooksType && configureId) configure(env, Json::array());
+std::optional<uint64_t> restore(JNIEnv* env, haaru::RestorePhase phase = haaru::RestorePhase::Runtime) {
     std::lock_guard transaction(publisherMutex);
-    std::string country, name;
-    { std::lock_guard lock(stateMutex); published.clear(); country = baseCountry; name = baseName; }
-    if (!baselineReady) return false;
-    bool first = __system_property_set(kKeys[0], country.c_str()) == 0 && readProperty(kKeys[0]) == country;
-    bool second = __system_property_set(kKeys[1], name.c_str()) == 0 && readProperty(kKeys[1]) == name;
-    return first && second;
+    std::string originals[2];
+    uint64_t revision;
+    {
+        std::lock_guard lock(stateMutex);
+        published.clear();
+        originals[0] = baseCountry;
+        originals[1] = baseName;
+        revision = baseRevision;
+    }
+    const bool restored = haaru::restoreGlobalState(phase, baselineReady,
+        [&] { return configure(env, Json::array()); },
+        [&](size_t index) { return __system_property_set(kKeys[index], originals[index].c_str()) == 0; },
+        [&](size_t index) { return readProperty(kKeys[index]) == originals[index]; });
+    if (!restored) return std::nullopt;
+    return revision;
+}
+void notifySimChanged(JNIEnv* env) {
+    if (!notifyId || !phoneContext) return;
+    env->CallStaticBooleanMethod(hooksType, notifyId, phoneContext);
+    if (env->ExceptionCheck()) env->ExceptionClear();
 }
 bool apply(JNIEnv* env, const Json& plan, std::string& error, uint64_t& acceptedRevision) {
     if (!engineReady || !guardsReady || !baselineReady) { error = "Central phone engine is not initialised"; return false; }
@@ -678,7 +709,7 @@ bool apply(JNIEnv* env, const Json& plan, std::string& error, uint64_t& accepted
         if (!configure(env, plan)) { error = "Central service snapshot was not accepted"; return false; }
         acceptedRevision = revision;
     }
-    if (notifyId && phoneContext) { env->CallStaticBooleanMethod(hooksType, notifyId, phoneContext); if (env->ExceptionCheck()) env->ExceptionClear(); }
+    notifySimChanged(env);
     error.clear(); return true;
 }
 void engineLoop() {
@@ -706,14 +737,13 @@ void engineLoop() {
             { std::lock_guard lock(stateMutex); if (response.value("shadowSaved", false) && revision == baseRevision) baseVerified = true; }
             if (response.value("recoveryRequired", false)) { recoveryRequired = true; engineReady = false; }
             publication.unlock();
-            bool active = response.value("active", false);
             auto hashValue = response.value("hash", std::string());
             Json plan = Json::array();
-            if (active && response.contains("config") && validConfig(response["config"])) {
+            if (response.value("active", false) && response.contains("config") && validConfig(response["config"])) {
                 auto& config = response["config"];
                 if (haaru::cacheAllowed(config.value("protocol", 0), config.value("readOnly", true),
                         config.value("enabled", false), config.value("bootId", std::string()) == bootId())) plan = config["profiles"];
-            } else active = false;
+            }
             bool healthy = engineReady && guardsReady;
             if (healthy && healthId) {
                 healthy = env->CallStaticBooleanMethod(hooksType, healthId) == JNI_TRUE;
@@ -726,14 +756,21 @@ void engineLoop() {
                 auto [stage, failure] = diagnostic();
                 restore(env); confirmed = false;
                 error = !failure.empty() ? failure : (recoveryRequired ? "An interrupted SIM update requires a full phone reboot" : "Central response engine is unavailable or unhealthy");
-            } else if (active && !validate(env, plan)) {
+            } else if (!validate(env, plan)) {
                 restore(env); confirmed = false; error = "SIM identity or readiness changed; refresh the SIM settings";
-            } else if (!active) {
-                confirmed = restore(env); error = confirmed ? "" : "Global restore was not verified";
-                if (confirmed) { std::lock_guard lock(stateMutex); appliedRevision = baseRevision; }
             } else if (!confirmed || currentHash != hashValue || changed || !propertiesMatch(plan)) {
-                confirmed = apply(env, plan, error, appliedRevision);
-                if (!confirmed) restore(env);
+                if (plan.empty()) {
+                    const auto restoredRevision = restore(env);
+                    confirmed = restoredRevision.has_value();
+                    error = confirmed ? "" : "Global restore was not verified";
+                    if (restoredRevision) {
+                        appliedRevision = *restoredRevision;
+                        notifySimChanged(env);
+                    }
+                } else {
+                    confirmed = apply(env, plan, error, appliedRevision);
+                    if (!confirmed) restore(env);
+                }
             }
             currentHash = hashValue;
             setStage("runtime");
@@ -881,10 +918,11 @@ void Module::preAppSpecialize(zygisk::AppSpecializeArgs* args) {
 void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
     if (!selected) return;
     try {
+        setStage("property-restore");
+        // The Java hook class has not been loaded at this stage.
+        if (!restore(env, haaru::RestorePhase::Bootstrap)) throw std::runtime_error("Original property restoration failed");
         LocalFrame frame(env, 96);
         requireJni(env, frame.valid, "JNI frame unavailable");
-        setStage("property-restore");
-        if (!restore(env)) throw std::runtime_error("Original property restoration failed");
         if (recoveryRequired) throw std::runtime_error("An interrupted SIM update requires a full phone reboot");
         if (!guardsReady || channel < 0) throw std::runtime_error("Required property guards or companion connection are unavailable");
         setStage("connection-validation");

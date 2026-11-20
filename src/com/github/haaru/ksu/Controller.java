@@ -5,12 +5,15 @@ import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.*;
 import java.nio.file.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import com.github.haaru.ksu.Backend.Subscription;
 import com.github.haaru.ksu.Backend.Values;
 
 /** Module-local configuration for the system-global volatile engine. No platform setters. */
 public final class Controller {
+    private static final String STALE_SIM_SELECTION = "SIM changed since status was read";
     private final Path dir, module;
     private final Backend backend;
     private final String boot;
@@ -78,7 +81,7 @@ public final class Controller {
                 if ("runtime".equals(op)) return runtime;
                 boolean mutation = !"status".equals(op);
                 if (mutation) save(runtime);
-                else atomicWrite(safePath(dir.resolve("runtime.json")), Json.encode(runtime).getBytes(StandardCharsets.UTF_8));
+                else publishStatusRuntime(runtime);
                 Map<String, Object> out = status(); out.put("verified", mutation);
                 out.put("verification", mutation ? "module-files" : "read-only"); return out;
             } finally { lock.release(); }
@@ -119,8 +122,11 @@ public final class Controller {
             throw new IllegalArgumentException("Unknown operation");
         int length = args.length == 0 ? 1 : args.length;
         if ("set".equals(op)) {
-            if (length != 4) throw new IllegalArgumentException("Usage: set SLOT ISO_OR_DASH CARRIER_UTF8_HEX_OR_DASH");
+            if (length != 4 && length != 5)
+                throw new IllegalArgumentException("Usage: set SLOT ISO_OR_DASH CARRIER_UTF8_HEX_OR_DASH [SELECTION_TOKEN]");
             parseSlot(args[1]);
+            if (length == 5 && !CompanionProtocol.validSelectionToken(args[4]))
+                throw new IllegalArgumentException("Invalid SIM selection token");
         } else if ("reset".equals(op) || "forget".equals(op)) {
             if (length != 2) throw new IllegalArgumentException("Usage: " + op + " SLOT"); parseSlot(args[1]);
         } else if ("saveprefs".equals(op)) {
@@ -137,6 +143,8 @@ public final class Controller {
         String carrier = decodeCarrier(args[3]);
         if (country.isEmpty() && carrier.isEmpty()) throw new IllegalArgumentException("Specify a country or carrier name");
         Subscription sub = find(slot);
+        if (args.length == 5 && (sub == null || !selectionToken(sub).equals(args[4])))
+            throw new IOException(STALE_SIM_SELECTION);
         if (sub == null) throw new IllegalStateException("No unambiguous active SIM in selected slot");
         Values current = values.get(sub.subId);
         if (current == null || !current.ready || issues.containsKey(slot))
@@ -145,8 +153,7 @@ public final class Controller {
             if (active.slot == sub.slot && active.subId == sub.subId && active.identity.equals(sub.identity)) {
                 String p = "profile." + slot + ".";
                 // Omitted fields merge only into an active profile belonging to this same SIM.
-                if (profileEnabled(slot) && matches(sub)
-                        && (!sub.identity.startsWith("weak:") || boot.equals(state.getProperty(p + "confirmedBoot")))) {
+                if (profileEnabled(slot) && matchesCurrentSim(sub)) {
                     if (country.isEmpty()) country = state.getProperty(p + "country", "");
                     if (carrier.isEmpty()) carrier = state.getProperty(p + "carrier", "");
                 }
@@ -156,7 +163,25 @@ public final class Controller {
                 state.setProperty(p + "enabled", "true"); state.remove(p + "error"); return;
             }
         }
-        throw new IOException("SIM changed during operation");
+        throw new IOException(args.length == 5 ? STALE_SIM_SELECTION : "SIM changed during operation");
+    }
+
+    private String selectionToken(Subscription sub) {
+        // Frame the fields as a JSON array before hashing. The underlying identity stays in the module.
+        String selection = Json.encode(Arrays.asList("haaru-sim-selection-v1", boot, sub.slot, sub.subId, sub.identity));
+        byte[] digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256").digest(selection.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+        StringBuilder token = new StringBuilder(digest.length * 2);
+        for (byte item : digest) {
+            int value = item & 0xff;
+            token.append(Character.forDigit(value >>> 4, 16));
+            token.append(Character.forDigit(value & 15, 16));
+        }
+        return token.toString();
     }
 
     public static String decodeCarrier(String encoded) throws Exception {
@@ -248,7 +273,9 @@ public final class Controller {
         List<Map<String, Object>> cards = new ArrayList<Map<String, Object>>();
         for (Subscription sub : subs) {
             Map<String, Object> card = new LinkedHashMap<String, Object>();
-            card.put("slot", sub.slot); card.put("subId", sub.subId); Values v = values.get(sub.subId);
+            card.put("slot", sub.slot); card.put("subId", sub.subId);
+            card.put("selectionToken", selectionToken(sub));
+            Values v = values.get(sub.subId);
             if (v != null) {
                 card.put("configCountry", v.country); card.put("carrierName", v.carrierName);
                 card.put("carrierOverride", v.carrierOverride); card.put("ready", v.ready);
@@ -266,6 +293,8 @@ public final class Controller {
             profile.put("slot", slot); profile.put("country", country); profile.put("carrierName", carrier);
             profile.put("enabled", profileEnabled(slot)); profile.put("countryOverride", !country.isEmpty());
             profile.put("carrierOverride", !carrier.isEmpty());
+            Subscription current = find(slot);
+            profile.put("matchesCurrentSim", current != null && matchesCurrentSim(current));
             if (issues.containsKey(slot)) profile.put("error", issues.get(slot)); profiles.add(profile);
         }
         out.put("subscriptions", cards); out.put("profiles", profiles);
@@ -450,6 +479,10 @@ public final class Controller {
         return String.valueOf(sub.subId).equals(state.getProperty(p + "subId"))
                 && sub.identity.equals(state.getProperty(p + "identity"));
     }
+    private boolean matchesCurrentSim(Subscription sub) {
+        return matches(sub) && (!sub.identity.startsWith("weak:")
+                || boot.equals(state.getProperty("profile." + sub.slot + ".confirmedBoot")));
+    }
     private Subscription find(int slot) { for (Subscription sub : subs) if (sub.slot == slot) return sub; return null; }
     private static int parseSlot(String value) {
         if (value == null || !value.matches("[0-7]")) throw new IllegalArgumentException("Slot must be 0 through 7");
@@ -489,6 +522,14 @@ public final class Controller {
         String schema = input.getProperty("schema");
         if (schema != null && !"4".equals(schema) && !"5".equals(schema))
             throw new IOException("Unsupported saved settings schema; use a compatible module version");
+    }
+    private void publishStatusRuntime(Map<String, Object> runtime) throws IOException {
+        Path cache = safePath(dir.resolve("runtime.json"));
+        byte[] next = Json.encode(runtime).getBytes(StandardCharsets.UTF_8);
+        // A foreground status poll should not rewrite an already verified cache.
+        if (Files.isRegularFile(cache, LinkOption.NOFOLLOW_LINKS) && Files.size(cache) == next.length
+                && Arrays.equals(readLimited(cache, 65536), next)) return;
+        atomicWrite(cache, next);
     }
     private void save(Map<String, Object> runtime) throws Exception {
         state.setProperty("enabled", String.valueOf(enabled()));

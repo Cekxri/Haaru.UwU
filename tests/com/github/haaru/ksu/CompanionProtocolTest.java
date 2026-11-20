@@ -17,6 +17,17 @@ public final class CompanionProtocolTest {
     public static void main(String[] args) throws Exception {
         check(Arrays.equals(new String[] {"status"}, frame("{\"protocol\":1,\"args\":[\"status\"]}\n")), "status frame reaches Controller arguments");
         check(Arrays.equals(new String[] {"set", "1", "GB", "6769666667616666"}, frame("{\"protocol\":1,\"args\":[\"set\",\"1\",\"GB\",\"6769666667616666\"]}\n")), "carrier hex is literal data");
+        String token = String.join("", Collections.nCopies(64, "e"));
+        String bound = "{\"protocol\":1,\"args\":[\"set\",\"1\",\"GB\",\"-\",\"" + token + "\"]}\n";
+        check(Arrays.equals(new String[] {"set", "1", "GB", "-", token}, frame(bound)),
+                "Status token is forwarded verbatim to Controller");
+        reject(bound.replace(token, ""));
+        reject(bound.replace(token, token.substring(1)));
+        reject(bound.replace(token, token.toUpperCase(Locale.ROOT)));
+        reject(bound.replace(token, token + "0"));
+        reject(bound.replace("\"" + token + "\"", "null"));
+        reject(bound.replace("\"" + token + "\"", "\"" + token + "\",\"extra\""));
+        reject("{\"protocol\":1,\"args\":[\"reset\",\"1\",\"" + token + "\"]}\n");
         for (String value : new String[] {
                 "{\"protocol\":2,\"args\":[\"status\"]}\n", "{\"protocol\":1.5,\"args\":[\"status\"]}\n",
                 "{\"protocol\":\"1\",\"args\":[\"status\"]}\n", "{\"protocol\":1,\"args\":[]}\n",

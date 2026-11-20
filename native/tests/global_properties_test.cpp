@@ -2,6 +2,7 @@
 #include "../src/global_properties.hpp"
 #include "../src/engine_diagnostics.hpp"
 #include "../src/companion_connection.hpp"
+#include <array>
 #include <iostream>
 #include <stdexcept>
 
@@ -73,6 +74,39 @@ int main() {
     probes = 0;
     check(verifySocket(ownedSocket, true) && probes == 1,
         "false exemption with no optional list is accepted only when a specialise-only path kept the same socket and replied");
+    using haaru::RestorePhase;
+    using Outcomes = std::array<bool, 2>;
+    const Outcomes bothSucceed{true, true};
+    const std::vector<std::string> completeRestore{"central", "write country", "write name", "read country", "read name"};
+    auto attemptRestore = [](RestorePhase phase, bool baseline, bool central, Outcomes writes, Outcomes reads) {
+        std::vector<std::string> calls;
+        const bool restored = haaru::restoreGlobalState(phase, baseline,
+            [&] { calls.push_back("central"); return central; },
+            [&](size_t index) { calls.push_back(index == 0 ? "write country" : "write name"); return writes.at(index); },
+            [&](size_t index) { calls.push_back(index == 0 ? "read country" : "read name"); return reads.at(index); });
+        return std::pair{restored, calls};
+    };
+    check(attemptRestore(RestorePhase::Runtime, true, true, bothSucceed, bothSucceed) == std::pair{true, completeRestore},
+        "runtime restore can be confirmed after central clear and both property write/readbacks succeed");
+    check(attemptRestore(RestorePhase::Runtime, true, false, bothSucceed, bothSucceed) == std::pair{false, completeRestore},
+        "central clear failure blocks confirmation without cancelling either property restore");
+    for (size_t index = 0; index < bothSucceed.size(); ++index) {
+        Outcomes oneFails = bothSucceed;
+        oneFails[index] = false;
+        check(attemptRestore(RestorePhase::Runtime, true, true, oneFails, bothSucceed) == std::pair{false, completeRestore},
+            "either property write failure blocks confirmation even when both readbacks match");
+        check(attemptRestore(RestorePhase::Runtime, true, true, bothSucceed, oneFails) == std::pair{false, completeRestore},
+            "either property readback mismatch blocks confirmation");
+    }
+    check(attemptRestore(RestorePhase::Runtime, false, true, bothSucceed, bothSucceed) == std::pair{false, std::vector<std::string>{"central"}},
+        "without a baseline, runtime may clear the central plan but must never write unknown originals");
+    const std::vector<std::string> bootstrapRestore(completeRestore.begin() + 1, completeRestore.end());
+    check(attemptRestore(RestorePhase::Bootstrap, true, false, bothSucceed, bothSucceed) == std::pair{true, bootstrapRestore},
+        "startup restores both properties before the central class is loaded");
+    check(attemptRestore(RestorePhase::Bootstrap, true, false, bothSucceed, {true, false}) == std::pair{false, bootstrapRestore},
+        "startup still fails closed when a property does not read back correctly");
+    check(attemptRestore(RestorePhase::Bootstrap, false, false, bothSucceed, bothSucceed) == std::pair{false, std::vector<std::string>{}},
+        "startup must reject restoration when the original values are unavailable");
     using haaru::PropertyProfile;
     using haaru::overlayProperty;
     using haaru::splitProperty;
@@ -99,7 +133,15 @@ int main() {
     check(overlayProperty("", {{0, "", std::string(45, ',')}}, false).size() == 90, "escaped punctuation counts encoded bytes");
     rejects<std::length_error>([] { overlayProperty("", {{0, "", std::string(46, ',')}}, false); }, "escape expansion cannot overflow property");
     check(overlayProperty(std::string(89, 'A') + ",X", {{1, "", "B"}}, false).size() == 91, "whole multi SIM list may use exactly 91 bytes");
-    rejects<std::length_error>([] { overlayProperty(std::string(90, 'A') + ",X", {{1, "", "B"}}, false); }, "whole list separator included in 92 byte rejection");
+    try {
+        overlayProperty(std::string(89, 'A') + ",X", {{1, "", "BC"}}, false);
+        check(false, "whole list separator included in 92 byte rejection");
+    } catch (const std::length_error& failure) {
+        const std::string message = failure.what();
+        check(message.find("Combined SIM operator names") != std::string::npos &&
+              message.find("91-byte") != std::string::npos && message.find("Shorten") != std::string::npos,
+            "aggregate name rejection explains the byte limit and what to change");
+    }
     std::string unicode;
     for (int i = 0; i < 30; ++i) unicode += "\xe5\x8f\xb0";
     check(overlayProperty("", {{0, "", unicode}}, false).size() == 90, "Unicode property bound uses UTF8 bytes");

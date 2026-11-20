@@ -21,14 +21,13 @@ import androidx.compose.ui.unit.sp
 import haaru.ui.HaaruTheme
 import haaru.ui.HaaruPresets
 import haaru.ui.SimCard
-import haaru.ui.SimDraft
+import haaru.ui.SimPlanInput
+import haaru.ui.simSelectionToken
 import haaru.ui.SimProfile
 import haaru.ui.UiStyle
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Text
 import java.util.Locale
-
-private val planCountryCode = Regex("[A-Z]{2}")
 
 /** The editor owns only local selection state. All durable actions use HaaruState. */
 @Composable
@@ -41,11 +40,14 @@ internal fun SimPlanPanel(
     val colours = HaaruTheme.colours
     val draft = state.draft(sim.slot)
     val profile = state.snapshot.profiles.firstOrNull { it.slot == sim.slot }
-    val keepsCountry = profile?.enabled == true && profile.country.isNotBlank()
-    val keepsCarrier = profile?.enabled == true && profile.carrier.isNotBlank()
+    val enabledProfile = profile?.takeIf { it.enabled && it.matchesCurrentSim == true }
+    val keepsCountry = !enabledProfile?.country.isNullOrBlank()
+    val keepsCarrier = !enabledProfile?.carrier.isNullOrBlank()
+    val stableCard = simSelectionToken.matches(sim.selectionToken)
+    val canEdit = stableCard && !state.busy
     val emptyCountryLabel = if (keepsCountry) "保留已存國家" else "保持原始 SIM 國家"
     val emptyCarrierLabel = if (keepsCarrier) "保留已存電信商名稱" else "保持原始電信商名稱"
-    var allCarriers by rememberSaveable(sim.slot) { mutableStateOf(false) }
+    var allCarriers by rememberSaveable(sim.slot, sim.selectionToken) { mutableStateOf(false) }
     val countries = remember(emptyCountryLabel) {
         listOf("" to emptyCountryLabel, "custom" to "自訂國家碼") +
             HaaruPresets.countries.map { it.code to HaaruPresets.countryLabel(it.code) }
@@ -55,10 +57,11 @@ internal fun SimPlanPanel(
             HaaruPresets.carriers.filter { allCarriers || draft.country.isBlank() || it.region == draft.country }
                 .map { it.id to HaaruPresets.carrierLabel(it) }
     }
-    val countryValid = draft.country.isBlank() || draft.country.matches(planCountryCode)
-    val canSave = state.writable && sim.ready && countryValid &&
+    val countryValid = SimPlanInput.validCountry(draft.country)
+    val carrierValid = SimPlanInput.validCarrier(draft.carrier)
+    val canSave = state.writable && stableCard && sim.ready && countryValid && carrierValid &&
         (draft.country.isNotBlank() || draft.carrier.isNotBlank())
-    val savedDraft = draftFromProfile(profile?.takeIf { it.enabled })
+    val savedDraft = draftFromProfile(enabledProfile)
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -81,24 +84,24 @@ internal fun SimPlanPanel(
         HaaruCard(UiStyle.MIUIX) {
             SelectionRow("國家", if (draft.customCountry) "自訂 · ${draft.country.ifBlank { "待輸入" }}"
                 else draft.country.takeIf { it.isNotBlank() }?.let(HaaruPresets::countryLabel)
-                    ?: emptyCountryLabel, HaaruIcons.Globe, enabled = !state.busy) {
+                    ?: emptyCountryLabel, HaaruIcons.Globe, enabled = canEdit) {
                 open("選擇國家", countries, if (draft.customCountry) "custom" else draft.country) { choice ->
-                    state.edit(sim.slot) {
+                    state.edit(sim.slot, sim.selectionToken) {
                         if (choice == "custom") it.copy(customCountry = true)
                         else it.copy(country = choice, customCountry = false)
                     }
                 }
             }
             if (draft.customCountry) HaaruField(UiStyle.MIUIX, draft.country, "兩位國家碼，例如 GB") { value ->
-                state.edit(sim.slot) { it.copy(country = value.uppercase(Locale.ROOT).filter { c -> c in 'A'..'Z' }.take(2)) }
+                state.edit(sim.slot, sim.selectionToken) { it.copy(country = value.uppercase(Locale.ROOT).filter { c -> c in 'A'..'Z' }.take(2)) }
             }
             HorizontalDivider(color = colours.outlineVariant)
             SelectionRow("電信商名稱", draft.carrier.ifBlank { emptyCarrierLabel }, HaaruIcons.Sim,
-                enabled = !state.busy) {
+                enabled = canEdit) {
                 val selected = if (draft.customCarrier) "custom"
                     else HaaruPresets.carriers.firstOrNull { it.displayName == draft.carrier }?.id.orEmpty()
                 open("選擇電信商", carriers, selected) { choice ->
-                    state.edit(sim.slot) {
+                    state.edit(sim.slot, sim.selectionToken) {
                         when (choice) {
                             "custom" -> it.copy(customCarrier = true)
                             "" -> it.copy(carrier = "", customCarrier = false)
@@ -109,16 +112,16 @@ internal fun SimPlanPanel(
                 }
             }
             if (draft.customCarrier) HaaruField(UiStyle.MIUIX, draft.carrier, "自訂名稱，最多 80 字元") { value ->
-                state.edit(sim.slot) { it.copy(carrier = value.filter { c -> c.code >= 32 && c.code != 127 }.take(80)) }
+                state.edit(sim.slot, sim.selectionToken) { it.copy(carrier = SimPlanInput.limitCarrier(value)) }
             }
-            SettingSwitch(UiStyle.MIUIX, "顯示全部電信商", "關閉時依所選國家篩選", allCarriers) {
+            SettingSwitch(UiStyle.MIUIX, "顯示全部電信商", "關閉時依所選國家篩選", allCarriers, enabled = canEdit) {
                 allCarriers = it
             }
             PlanMessage("這些選擇是草稿。儲存後，還需等系統確認是否已套用。")
             if (keepsCountry || keepsCarrier) PlanMessage("已啟用方案的空白欄位會保留已存值；需要完整恢復原始回報時，請使用「還原 SIM」。")
             HaaruButton(UiStyle.MIUIX, if (state.busy) "正在確認…" else "儲存 SIM ${sim.slot + 1}",
                 enabled = canSave, modifier = Modifier.fillMaxWidth()) {
-                state.run("set", sim.slot, draft.country, draft.carrier)
+                state.run("set", sim.slot, draft.country, draft.carrier, sim.selectionToken)
             }
             val reason = when {
                 state.busy -> ""
@@ -126,34 +129,28 @@ internal fun SimPlanPanel(
                 state.snapshot.readOnly -> "模組目前唯讀，請先在模組管理器確認 Haaru 已啟用。"
                 !state.fresh -> "請先重新讀取模組狀態。"
                 !sim.ready -> "這張 SIM 尚未準備好，暫時不能儲存。"
-                !countryValid -> "國家碼需要兩個英文字母。"
+                !stableCard -> "模組尚未提供 SIM 身分確認。請更新模組並重新啟動手機。"
+                !countryValid -> "請輸入有效的兩位 ISO 國家碼，例如 GB。"
+                !carrierValid -> "電信商名稱限 80 字元內的單行文字。"
                 draft.country.isBlank() && draft.carrier.isBlank() -> "選擇國家或電信商名稱後，就可以儲存。"
                 else -> ""
             }
             if (reason.isNotBlank()) PlanMessage(reason)
             if (draft != savedDraft) HaaruTextButton(
-                onClick = { state.edit(sim.slot) { savedDraft } },
-                enabled = state.fresh && !state.busy, modifier = Modifier.fillMaxWidth()
-            ) { Text(if (profile?.enabled == true) "載入已啟用方案" else "清空未儲存草稿", color = if (state.fresh && !state.busy) colours.onSurfaceVariant
+                onClick = { state.edit(sim.slot, sim.selectionToken) { savedDraft } },
+                enabled = state.fresh && canEdit, modifier = Modifier.fillMaxWidth()
+            ) { Text(if (enabledProfile != null) "載入已啟用方案" else "清空未儲存草稿", color = if (state.fresh && canEdit) colours.onSurfaceVariant
                 else colours.onSurface.copy(alpha = .38f)) }
         }
 
-        if (profile != null) SavedSimPlan(sim.slot, profile, state, confirm)
+        if (profile != null) SavedSimPlan(sim, profile, state, confirm)
     }
 }
 
-/** Reverting an editor never sends reset/forget or changes the durable plan. */
-private fun draftFromProfile(profile: SimProfile?): SimDraft {
-    val country = profile?.country.orEmpty()
-    val carrier = profile?.carrier.orEmpty()
-    return SimDraft(country, carrier,
-        country.isNotBlank() && HaaruPresets.countries.none { it.code == country },
-        carrier.isNotBlank() && HaaruPresets.carriers.none { it.displayName == carrier })
-}
-
 @Composable
-private fun SavedSimPlan(slot: Int, profile: SimProfile, state: HaaruState,
+private fun SavedSimPlan(sim: SimCard, profile: SimProfile, state: HaaruState,
                          confirm: (String, String, () -> Unit) -> Unit) {
+    val slot = sim.slot
     val colours = HaaruTheme.colours
     val canRestore = !state.busy && !state.snapshot.upgradePending
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -164,10 +161,15 @@ private fun SavedSimPlan(slot: Int, profile: SimProfile, state: HaaruState,
         PlanMessage(if (profile.enabled) "此方案已啟用。是否生效，以系統確認狀態為準。"
             else "此方案已停止套用，選擇仍保留。")
         if (profile.error.isNotBlank()) PlanMessage("此卡的已存方案回報錯誤，請查看工具頁的診斷。", error = true)
-        if (!profile.enabled && (profile.country.isNotBlank() || profile.carrier.isNotBlank())) {
-            HaaruButton(UiStyle.MIUIX, "重新套用這張 SIM 的已存方案", enabled = state.writable,
+        if (profile.matchesCurrentSim == false) {
+            PlanMessage("此方案屬於先前辨識的 SIM。請重新選擇這張卡的設定。")
+        }
+        if (!profile.enabled && profile.matchesCurrentSim == true &&
+            (profile.country.isNotBlank() || profile.carrier.isNotBlank())) {
+            HaaruButton(UiStyle.MIUIX, "重新套用這張 SIM 的已存方案",
+                enabled = state.writable && sim.ready && simSelectionToken.matches(sim.selectionToken),
                 secondary = true, modifier = Modifier.fillMaxWidth()) {
-                state.run("set", slot, profile.country, profile.carrier)
+                state.reapplySavedPlan(sim, profile)
             }
         }
         HorizontalDivider(color = colours.outlineVariant)
@@ -198,7 +200,7 @@ internal fun ToolsPanel(state: HaaruState, preferenceError: String,
                 else "還沒有已存方案。先在首頁選好 SIM 並儲存。")
             HaaruButton(UiStyle.MIUIX, "重新套用已存方案", enabled = state.writable && hasSavedPlans,
                 modifier = Modifier.fillMaxWidth()) {
-                state.run(if (state.snapshot.enabled) "refresh" else "enable")
+                state.reapplySavedPlans()
             }
         }
         HaaruCard(UiStyle.MIUIX) {
@@ -264,7 +266,7 @@ private fun PlanDiagnostics(state: HaaruState, preferenceError: String) {
         if (expanded) {
             val engine = state.snapshot.globalEngine
             PlanReadout("模組版本", state.snapshot.moduleVersion.ifBlank { "尚未讀取" })
-            PlanReadout("系統確認", state.snapshot.engineLabel)
+            PlanReadout("系統確認", state.engineLabel)
             PlanReadout("Android SDK / Hook", "${engine?.sdk ?: "未回報"} / ${engine?.hooks ?: "未回報"}")
             state.snapshot.warnings.forEach { warning -> PlanMessage(warning) }
             state.snapshot.profiles.filter { it.error.isNotBlank() }.forEach { profile ->

@@ -16,7 +16,7 @@
 
 ## 你好，這裡是 Haaru ☁️
 
-**0.8.0 是尚未公開的本機候選版本。** 四頁 3D 場景與新底欄已在本機 Android 模擬器核對。手機幀率與電話引擎仍待實機驗證。下載請以 Releases 已公開的版本為準。
+**0.8.1 為公開預覽版，延續 0.8.0 的原生設計。** 這次修正全域重套、換卡時的儲存保護、系統狀態判定、外觀偏好與還原確認。四頁 3D 場景與底欄的模擬器紀錄來自 0.8.0。手機幀率與 KernelSU 電話引擎仍待實機驗證。
 
 Haaru 是 KernelSU 模組，讓你替每張 SIM 選擇 Android 回報的國家與電信商名稱。操作使用 Miuix，畫面則是隨頁面移動與變形的有機 3D 雕塑、低彩度表面與真正的液態玻璃底欄。模型、光源和控件都跟著你選的色彩改變。
 
@@ -40,7 +40,8 @@ Haaru 是 KernelSU 模組，讓你替每張 SIM 選擇 Android 回報的國家�
 - 國家和名稱可以分開改；選電信商不會偷偷換國家。已啟用方案的空白欄位會保留已存值，介面會寫「保留已存國家／名稱」；要恢復原始回報，請使用「還原 SIM」。
 - 「載入已啟用方案」與「清空未儲存草稿」只改畫面中的草稿，不會刪除已存方案。
 - 「SIM 回報國家」優先讀取同次開機的原值快取；沒有可用快取時讀取系統 getter，不會把每次回報都稱為原始值。
-- 「還原」停止套用，保留你的方案；「清除設定」才把方案刪掉。
+- 「重新套用已存方案」也會啟用曾停止套用的方案。介面會另外顯示系統是否確認生效。
+- 「還原」停止套用並保留方案。「清除設定」會把方案刪掉。
 - 更新可直接刷新版 ZIP，再完整重啟。安裝器會安全遷移早期 Haaru 的設定，避免新舊引擎同時執行。
 - 變動限於系統回報值，實體 SIM、APN、IP 和 GPS 不會因此換地區，也不能保證某個 App 的服務端判定會跟著改變。
 - 設定留在模組資料夾，沒有遙測。移除模組後完整重啟，介面 App 也可另外移除。
@@ -62,7 +63,7 @@ Haaru 是 KernelSU 模組，讓你替每張 SIM 選擇 Android 回報的國家�
 
 A little café for your SIM settings. Coffee first, then pick a country. ☕
 
-**0.8.0 is an unpublished local candidate.** The four 3D pages and new navigation dock were checked on a local Android emulator. Handset frame timing and phone engine validation are pending. Download the published version from Releases.
+**0.8.1 is a public preview that continues the native design from 0.8.0.** It fixes reapplying all plans, saving after a SIM swap, status reporting, appearance preferences and restore confirmation. Emulator checks for the four 3D screens and navigation dock used 0.8.0. Handset frame timing and KernelSU phone engine validation are pending.
 
 Haaru is a KernelSU module for the SIM country and carrier name that Android reports. Choose from **28 countries and 74 carriers**, or use your own name. Each SIM keeps its own settings. The companion App uses Miuix controls, organic 3D forms that move and morph between pages, quiet surfaces and genuine liquid glass navigation. Models, lighting and controls follow your selected colours.
 
@@ -84,6 +85,7 @@ You need KernelSU and a working Zygisk provider. Android 10+ is the starting poi
 - Country and carrier name are independent choices. Empty fields in an active plan preserve their saved values, labelled as keeping the saved country/name. Use Restore SIM to return to the original reported values.
 - Loading an active plan or clearing an unsaved draft changes only the editor, without deleting the saved plan.
 - Reported SIM country prefers the current-boot original-value cache and otherwise reads the system getter. The interface does not label every response as an original value.
+- Reapply Saved Plans also enables previously stopped plans. The app shows confirmation of application separately.
 - Restore stops applying a plan and keeps it. Clear deletes the saved plan.
 - Flash a newer ZIP and fully reboot to update. Earlier Haaru settings are migrated with checks that prevent both engines from running together.
 - This changes reported values. It does not relocate your physical SIM, APN, IP or GPS, and it cannot promise an App’s server-side region will change.

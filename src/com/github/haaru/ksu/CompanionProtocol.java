@@ -40,7 +40,7 @@ public final class CompanionProtocol {
                 || ((BigDecimal) protocol).compareTo(BigDecimal.ONE) != 0 || !(raw instanceof List))
             throw new IOException("Unsupported module request protocol");
         List<?> items = (List<?>) raw;
-        if (items.isEmpty() || items.size() > 4) throw new IOException("Invalid module argument count");
+        if (items.isEmpty() || items.size() > 5) throw new IOException("Invalid module argument count");
         String[] args = new String[items.size()];
         for (int i = 0; i < args.length; i++) {
             if (!(items.get(i) instanceof String)) throw new IOException("Module arguments must be strings");
@@ -52,13 +52,20 @@ public final class CompanionProtocol {
         } else if ("reset".equals(op) || "forget".equals(op)) {
             if (args.length != 2 || !args[1].matches("[0-7]")) throw new IOException("Invalid SIM slot");
         } else if ("set".equals(op)) {
-            if (args.length != 4 || !args[1].matches("[0-7]") || !args[2].matches("-|[A-Z]{2}")
+            if ((args.length != 4 && args.length != 5)
+                    || !args[1].matches("[0-7]") || !args[2].matches("-|[A-Z]{2}")
                     || !("-".equals(args[3]) || args[3].matches("(?:[0-9a-f]{2}){1,320}")))
                 throw new IOException("Invalid SIM settings request");
+            if (args.length == 5 && !validSelectionToken(args[4]))
+                throw new IOException("Invalid SIM selection token");
         } else if ("saveprefs".equals(op)) {
             if (args.length != 2 || !args[1].matches("(?:[0-9a-f]{2})+")) throw new IOException("Invalid appearance request");
         } else throw new IOException("Unsupported module operation");
         return args;
+    }
+
+    static boolean validSelectionToken(String value) {
+        return value != null && value.matches("[0-9a-f]{64}");
     }
 
     public static void response(OutputStream output, Map<String, Object> value) throws IOException {

@@ -1,13 +1,15 @@
-# Haaru 原生 Android 介面（0.8.0 本機候選）
+# Haaru 原生 Android 介面（0.8.1）
 
-0.8.0（versionCode 15）是尚未公開的前端重構。目前來源 `9dd21538` 已完成 App 建置與 30 項主機測試，包含首次啟動配色及舊偏好相容。API 33 本機模擬器使用 RTX 3060 加速，已取得四頁原生場景、明暗主題與底欄選中標籤的像素證據。0.7.3 產物與報告屬於歷史版本。
+0.8.1（versionCode 16）延續公開預覽版 0.8.0 的原生介面，修正 SIM 方案、狀態及外觀持久化。舊版來源 `9dd21538` 的 App 通過 30 項主機測試，API 33 模擬器也核對四頁 3D 場景、深淺主題與底欄標籤。0.8.1 的建置與測試以當次產物清單為準。
 
-主介面在 `companion/`，以 Kotlin／Compose Android 編譯成 `dist/Haaru-0.8.0.apk`。介面使用 Miuix、Backdrop、原生 GLES3 場景與隨附 Manrope 字型，CJK 由 Android 系統 fallback；沒有控件風格切換。模組執行按鈕負責開啟原生 App 或重試安裝同版本 APK。
+主介面在 `companion/`，以 Kotlin／Compose Android 編譯成 `dist/Haaru-0.8.1.apk`。介面使用 Miuix、Backdrop、原生 GLES3 場景與隨附 Manrope 字型，CJK 由 Android 系統 fallback；沒有控件風格切換。模組執行按鈕負責開啟原生 App 或重試安裝同版本 APK。
 
 ## 建置
 
 ```powershell
 python setup_android_sdk.py --accept-licenses
+python build_rust.py
+python build_native.py
 python build_companion.py --java-home "C:/path/to/jdk-21"
 python build.py
 python verify_release.py
@@ -19,7 +21,7 @@ python verify_release.py
 
 `build_companion.py` 編譯 release APK、zipalign、以持久私人金鑰簽署，輸出 `dist/companion-build-manifest.json`。私鑰和密碼在 `tools/companion-signing/`；維護者必須私人備份，以便後續相同簽章覆蓋更新。這些檔案與 `*.jks`、`*.keystore`、`local.properties`、`.gradle` 不進 source ZIP。
 
-manifest 包含 APK hash／bytes、applicationId、versionCode、來源檔 hash／bytes、canonical source tree hash、實際簽章憑證 SHA256 與依賴版本。`build.py` 和 `verify_release.py` 再次執行 aapt2／apksigner，並校验真實 DEX checksum／signature；改過來源卻沿用舊 APK、漏記新增 App 檔案或簽章不符會拒絕發佈。模組的 `companion.prop` 由驗證過的 package／公開 signer SHA256／protocol=1 確定性生成；ZIP、source 和 manifest 交叉核對這份 pin。
+manifest 包含 APK hash／bytes、applicationId、versionCode、來源檔 hash／bytes、canonical source tree hash、實際簽章憑證 SHA256 與依賴版本。`build.py` 和 `verify_release.py` 再次執行 aapt2／apksigner，並校驗實際 DEX checksum／signature；改過來源卻沿用舊 APK、漏記新增 App 檔案或簽章不符會拒絕發佈。模組的 `companion.prop` 由驗證過的 package／公開 signer SHA256／protocol=1 確定性生成；ZIP、source 和 manifest 交叉核對這份 pin。
 
 ## 操作與效能
 
@@ -29,9 +31,9 @@ MaterialKolor material-color-utilities **6.0.0** 提供五種色彩風格：Expr
 
 關閉動態色彩後提供 15 個預設（含 9 個紫色系）、色相／飽和度／亮度選擇器與可選的進階色碼；手動種子色也使用同一組風格。沒有設定或設定物件為空時，`dynamicColour` 預設為 `false`。既有明確儲存的 `true` 或 `false` 會保留，非空的舊設定物件若缺少此欄位，則沿用原本的 `true` 預設。`customColour` 為空字串或 `#RRGGBB`。`colourStyle` 可為 `EXPRESSIVE`／`VIBRANT`／`TONAL_SPOT`／`NEUTRAL`／`CMF`，缺少欄位時預設 `EXPRESSIVE`。App、Java Controller 和 Rust 更新遷移保存這個欄位；外觀切換不會重新套用 SIM 計畫。早期 `MATERIAL3` 外觀值可以讀取，但介面只呈現 Miuix，新保存的 `style` 固定為 `MIUIX`。
 
-前端協調器 `HaaruApp.kt` 持有 State、每卡草稿、偏好、頁面及浮層請求。`StatusPresentation.kt` 只呈現真實狀態；`PlanPanels.kt` 提供 SIM 方案、重套／還原／清除與預設收起的診斷。Compact 使用三頁 Backdrop 底欄，expanded 使用側邊 rail 與獨立操作欄；切頁不重建 State，也不送 SIM 命令。原始 carrier label、SIM 回報國家、草稿、已存方案與 applied ACK 分開。
+`HaaruApp.kt` 串接 `HaaruState` 的 SIM 草稿與狀態、外觀協調器、頁面及浮層。`StatusPresentation.kt` 區分方案已儲存、部分生效及全域確認。`PlanPanels.kt` 提供重套、還原、清除與預設收起的診斷。App 在前景定期讀取模組，狀態或引擎回報過期時會撤下確認。Compact 使用三頁 Backdrop 底欄，expanded 使用側邊 rail 與獨立操作欄。
 
-`set` 的空字段在同 SIM 已啟用方案上保留既有值；要完整回原始，使用 `reset`，不是以空值假裝清除個別 override。「載入已啟用方案／清空未儲存草稿」只修改 RAM，與 `reset`／`forget` 分開。Save 仍依 fresh、非 readOnly／upgrade／busy、SIM ready 及合法非空草稿判斷，不要求引擎已初始化或全域已確認。
+`set` 會送出模組在狀態回覆提供的 SIM 選取令牌。模組在寫入前核對即時 SIM 身分。已啟用方案可在符合目前 SIM 時預填草稿，已停用且符合目前 SIM 的方案可單卡重套。`set` 在同 SIM 的已啟用方案上保留空白欄位的存值。完整還原使用 `reset`。「載入已啟用方案」與「清空未儲存草稿」只修改畫面草稿。工具頁的全域重套使用 `enable`，讓原本停用的方案也能重新啟用。
 
 「關於信息」連接獨立 `AboutPage`，顯示 App／模組版本、作者、倉庫／Releases 與鳴謝；頁面沿用目前的主題角色及持續 3D 場景，不再使用固定紫色背景或 Canvas 咖啡杯主視覺。返回按鈕與 Android 返回鍵回到設定，底欄在關於頁隱藏。隨附 `assets/licences/*.txt` 在背景 IO 讀取 UTF-8 全文，包含 Manrope OFL，供離線閱讀。修正版模擬器已核對關於頁返回設定。先前的同一介面流程另核對了鳴謝與 Manrope OFL 全文。
 
@@ -39,7 +41,7 @@ MaterialKolor material-color-utilities **6.0.0** 提供五種色彩風格：Expr
 
 ModuleBridge 使用 LocalSocket 連到模組的受限 IPC 服務，App 不啟動 `su`、不要求獨立 superuser 授權。模組服務從 SO_PEERCRED 取得實際 UID，再核對 PackageManager 的 package UID／packages-for-UID 和已安裝 APK signer；身份驗證使用公開憑證 pin，不信任客戶端自報 package／UID。只允許固定的狀態／SIM／外觀操作，不提供任意 shell、路徑或 Root 程式執行。
 
-SIM 槽位、ISO、名稱與請求長度在 App 和服務端驗證，IPC 在背景 IO、操作序列化。Root 權限只由 KSU 模組服務持有，設定仍保存於模組目錄；外觀使用 `data/appearance.json`，更新時移轉早期外觀檔。同簽章 APK 更新沿用授權身份，不鎖 versionCode；簽章更換需更新模組 pin 與相應 APK。
+SIM 槽位、ISO、名稱與請求長度在 App 和服務端驗證，IPC 在背景 IO、操作序列化。Root 權限只由 KSU 模組服務持有，設定仍保存於模組目錄。外觀使用 `data/appearance.json`，更新時移轉早期外觀檔。App 在首次讀取成功後開放修改，返回前景或手動重新讀取時再載入，並在模組確認相同的寫入內容後顯示儲存成功。同簽章 APK 更新沿用授權身份。簽章更換需更新模組 pin 與相應 APK。
 
 選單只修改草稿，保存才寫計畫；保存成功與中央引擎 applied 分開呈現。原始 carrier label、CarrierConfig override 和保存的設定保持不同語義。完整 28 國／74 電信商從原資料同步，原值逐項測試。
 
@@ -53,10 +55,10 @@ Manrope variable 字型隨 `res/font/manrope.ttf` 打包，OFL 隨授權 assets 
 
 Choreographer 跟隨實際 vsync，DisplayManager 接收刷新率變化。場景活躍時，App 可請求系統在相同解析度下採用較高的刷新率，實際模式由系統決定。提交排程不設 120 fps 上限。品質分級優先降低 framebuffer、網格及取樣成本，省電或溫度條件也可降低提交頻率。減少動畫時只在輸入改變時更新靜態畫面。App 進入背景、舞台離開可見範圍或 surface 消失時停止逐幀提交。舞台離開可見範圍時清除一次已快取的場景，避免文字下方殘留模型。
 
-RTX 3060 加速的 60 Hz 模擬器以 GLES 3.1 繪製四頁，記錄高品質、景深、局部自發光與背景暫停／恢復。暖機樣本的渲染提交率約 57.5–60 Hz，CPU 提交耗時約 0.63–2.99 ms。這些數值屬於 `f6937975` 的 `HaaruSculpture` 記錄，量測範圍是模擬器提交，手機實際呈現幀率及長時間負荷仍待量測。
+0.8.0 的 60 Hz 模擬器使用 RTX 3060 加速，以 GLES 3.1 繪製四頁，記錄高品質、景深、局部自發光與背景暫停／恢復。暖機樣本的渲染提交率約 57.5–60 Hz，CPU 提交耗時約 0.63–2.99 ms。這些數值屬於 `f6937975` 的 `HaaruSculpture` 記錄，量測範圍是模擬器提交，手機實際呈現幀率及長時間負荷仍待量測。
 
 ## 證據範圍
 
-底欄前景修正版 `bbc739e8` 以 1440 × 3200、530 dpi 的合成資料預覽取樣。首頁、工具、設定的六組深淺主題選中文字對比為 11.57–13.68:1。該批也核對薄荷手動色、Vibrant、深淺切換與關於頁返回。其他版型和互動應以帶來源指紋的原生報告為準。APK、模組 ZIP、來源封裝與隱私掃描使用各自的當前報告，核對指令見 [發佈準備](RELEASE.md)。
+0.8.0 的底欄前景修正版 `bbc739e8` 以 1440 × 3200、530 dpi 的合成資料預覽取樣。首頁、工具、設定的六組深淺主題選中文字對比為 11.57–13.68:1。該批也核對薄荷手動色、Vibrant、深淺切換與關於頁返回。其他版型和互動應以帶來源指紋的原生報告為準。APK、模組 ZIP、來源封裝與隱私掃描使用各自的當前報告，核對指令見 [發佈準備](RELEASE.md)。
 
 `dist/device-report.json` 需記錄測試設備、scope、逐項結果與當前 module/APK/native/companion fingerprints。只測 App 開啟不可延伸為全域 SIM、DB/eSIM、雙卡、provider 故障或卸載撤除均通過。這些項目按實際成功 scope 分開報告。

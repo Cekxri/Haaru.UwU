@@ -4,6 +4,7 @@ import java.io.*;
 import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.nio.file.attribute.FileTime;
 import java.util.*;
 import com.github.haaru.ksu.Backend.Subscription;
 import com.github.haaru.ksu.Backend.Values;
@@ -46,6 +47,15 @@ public final class ControllerTest {
     private static Map<String, Object> profile(Map<String, Object> result, int slot) {
         for (Map<String, Object> p : profiles(result)) if (((Number) p.get("slot")).intValue() == slot) return p;
         throw new AssertionError("Missing profile " + slot);
+    }
+    private static String selection(Map<String, Object> status, int slot) {
+        for (Object item : (List<?>) status.get("subscriptions")) {
+            Map<?, ?> card = (Map<?, ?>) item;
+            if (((Number) card.get("slot")).intValue() == slot) {
+                return (String) card.get("selectionToken");
+            }
+        }
+        throw new AssertionError("Missing selectable SIM in slot " + slot);
     }
     private static Properties state(Path dir) throws Exception {
         Properties out = new Properties(); try (InputStream in = Files.newInputStream(dir.resolve("state.properties"))) { out.load(in); } return out;
@@ -128,6 +138,100 @@ public final class ControllerTest {
         f = new Fake(); f.unavailable = true; dir = directory(); c = controller(dir, f, "boot1");
         check(Boolean.TRUE.equals(c.run("disable").get("verified")), "Disable works with phone services unavailable");
         check(Boolean.TRUE.equals(c.run("clear").get("verified")), "Clear works offline");
+    }
+    private static void boundSimSelection() throws Exception {
+        Fake f = new Fake(); f.add(1, 20, "strong:B");
+        Path dir = directory(); Controller c = controller(dir, f, "boot1");
+        Map<String, Object> status = c.run("status");
+        String slot0 = selection(status, 0), slot1 = selection(status, 1);
+        check(slot0.matches("[0-9a-f]{64}") && slot1.matches("[0-9a-f]{64}") && !slot0.equals(slot1),
+                "Status exposes distinct opaque selection tokens");
+        check(!Json.encode(status.get("subscriptions")).contains("strong:"), "Status must not expose backend identities");
+        check(slot1.equals(selection(controller(dir, f, "boot1").run("status"), 1)),
+                "Selection token is stable across controller requests in the same boot");
+        byte[] beforeSelection = Files.readAllBytes(dir.resolve("runtime.json"));
+        rejects(c, "set", "1", "JP", "-", "invalid");
+        rejects(c, "set", "1", "JP", "-", slot0);
+        rejects(controller(dir, f, "boot2"), "set", "1", "JP", "-", slot1);
+        check(!Files.exists(dir.resolve("state.properties")) && Arrays.equals(beforeSelection, Files.readAllBytes(dir.resolve("runtime.json"))),
+                "Invalid, wrong-slot and previous-boot tokens leave stored state and runtime unchanged");
+
+        Map<String, Object> saved = c.run("set", "1", "JP", "-", slot1);
+        check(Boolean.TRUE.equals(saved.get("verified")) && "jp".equals(profile(saved, 1).get("country"))
+                && Boolean.TRUE.equals(profile(saved, 1).get("matchesCurrentSim")),
+                "Matching bound request saves the requested profile");
+        Map<String, Object> stopped = c.run("reset", "1");
+        check(Boolean.FALSE.equals(profile(stopped, 1).get("enabled"))
+                && Boolean.TRUE.equals(profile(stopped, 1).get("matchesCurrentSim")),
+                "Stopped profile remains associated with the same present SIM");
+        byte[] beforeState = Files.readAllBytes(dir.resolve("state.properties"));
+        byte[] beforeRuntime = Files.readAllBytes(dir.resolve("runtime.json"));
+        f.cards.remove(1);
+        rejects(c, "set", "1", "FR", "-", slot1);
+        f.add(1, 21, "strong:B");
+        rejects(c, "set", "1", "FR", "-", slot1);
+        f.cards.set(1, new Subscription(1, 20, "strong:replacement"));
+        rejects(c, "set", "1", "FR", "-", slot1);
+        check(Arrays.equals(beforeState, Files.readAllBytes(dir.resolve("state.properties")))
+                && Arrays.equals(beforeRuntime, Files.readAllBytes(dir.resolve("runtime.json"))),
+                "Absent, changed-subscription and same-ID replacement cases keep the stopped plan and runtime intact");
+
+        Map<String, Object> replaced = c.run("status");
+        check(Boolean.FALSE.equals(profile(replaced, 1).get("matchesCurrentSim")),
+                "Stopped profile for a replacement card is not a match");
+        String replacement = selection(replaced, 1);
+        check(!slot1.equals(replacement), "A different SIM with a reused subscription ID changes the token");
+        Map<String, Object> reassigned = c.run("set", "1", "FR", "-", replacement);
+        check(Boolean.TRUE.equals(reassigned.get("verified")) && "fr".equals(profile(reassigned, 1).get("country")),
+                "A new selection read from the replacement SIM allows an explicit save");
+
+        Fake during = new Fake(); Path duringDir = directory(); Controller duringController = controller(duringDir, during, "boot1");
+        String duringToken = selection(duringController.run("status"), 0);
+        during.lists = 0; during.replaceOnSecondRead = true;
+        try {
+            duringController.run("set", "0", "JP", "-", duringToken);
+            throw new AssertionError("Bound save accepted a SIM replacement during the second read");
+        } catch (IOException expected) {
+            check("SIM changed since status was read".equals(expected.getMessage()), "Second-read mismatch reports a refreshable conflict");
+        }
+        check(!Files.exists(duringDir.resolve("state.properties")), "The second live read still prevents saving after a swap");
+
+        Fake weak = new Fake(); weak.cards.set(0, new Subscription(0, 10, "weak:slot=0;subId=10"));
+        Path weakDir = directory(); Controller weakBoot1 = controller(weakDir, weak, "boot1");
+        String weakToken = selection(weakBoot1.run("status"), 0);
+        weakBoot1.run("set", "0", "GB", "-", weakToken);
+        check(Boolean.TRUE.equals(profile(weakBoot1.run("reset", "0"), 0).get("matchesCurrentSim")),
+                "Stopped weak identity matches during the boot in which it was confirmed");
+        Map<String, Object> weakAfterBoot = controller(weakDir, weak, "boot2").run("status");
+        check(Boolean.FALSE.equals(profile(weakAfterBoot, 0).get("matchesCurrentSim"))
+                && !weakToken.equals(selection(weakAfterBoot, 0)), "Weak identity must be confirmed again after reboot");
+    }
+    private static void statusPublishesOnlyChangedRuntime() throws Exception {
+        Fake f = new Fake(); Path dir = directory(); Controller c = controller(dir, f, "boot1");
+        c.run("set", "0", "GB", "-");
+        Path runtime = dir.resolve("runtime.json");
+        byte[] initial = Files.readAllBytes(runtime);
+        Files.setLastModifiedTime(runtime, FileTime.fromMillis(123456000L));
+        FileTime sentinel = Files.getLastModifiedTime(runtime);
+        Map<String, Object> same = c.run("status");
+        check(Files.getLastModifiedTime(runtime).equals(sentinel) && Arrays.equals(initial, Files.readAllBytes(runtime))
+                && independentHash(initial).equals(same.get("currentConfigHash")),
+                "Byte-identical status polling retains the original file and ACK hash");
+        // Preserve size while changing a byte to prove skip checks actual content.
+        byte[] altered = initial.clone(); altered[0] = ' ';
+        Files.write(runtime, altered);
+        c.run("status");
+        check(Arrays.equals(initial, Files.readAllBytes(runtime)), "Same-length differing cache is republished");
+        f.cards.clear();
+        Map<String, Object> changed = c.run("status");
+        byte[] updated = Files.readAllBytes(runtime);
+        check(!Arrays.equals(initial, updated) && independentHash(updated).equals(changed.get("currentConfigHash")),
+                "SIM removal republishes the changed runtime and exposes its hash");
+        check(Boolean.FALSE.equals(profile(changed, 0).get("matchesCurrentSim")) && profile(changed, 0).containsKey("error"),
+                "Absent active profile retains its error and is not a match");
+        Files.delete(runtime);
+        c.run("status");
+        check(Arrays.equals(updated, Files.readAllBytes(runtime)), "Missing runtime is regenerated by status");
     }
     private static void appearanceWithoutApplicationRouting() throws Exception {
         Fake f = new Fake(); f.unavailable = true; Path dir = directory(); Controller c = controller(dir, f, "boot1");
@@ -375,7 +479,8 @@ public final class ControllerTest {
         check("".equals(fallback.get("moduleVersion")) && ((Number) fallback.get("moduleVersionCode")).intValue() == 0, "Missing optional fixture metadata uses harmless version defaults");
     }
     public static void main(String[] args) throws Exception {
-        inputsAndMerge(); isolationAndIdentity(); appearanceWithoutApplicationRouting(); pathsLocksAndMigration(); globalEngineAcknowledgment(); strictJson(); upgradeStatusAndSchemas(); nativeAppearanceMigrationAndMonet();
+        inputsAndMerge(); isolationAndIdentity(); boundSimSelection(); statusPublishesOnlyChangedRuntime();
+        appearanceWithoutApplicationRouting(); pathsLocksAndMigration(); globalEngineAcknowledgment(); strictJson(); upgradeStatusAndSchemas(); nativeAppearanceMigrationAndMonet();
         System.out.println("Controller v5: " + checks + " global-protocol/module-file checks passed");
     }
 }

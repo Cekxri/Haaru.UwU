@@ -1,8 +1,24 @@
 # 更新紀錄 / Changes
 
-## 0.8.0 — 未公開候選 / Unpublished candidate
+## 0.8.1 — 公開預覽 / Public preview
 
-完整替換前端視覺與跨頁體驗，尚未公開。RTX 3060 加速的 60 Hz Android 模擬器已繪製四頁場景。修正版底欄選中文字在深淺主題中通過原生像素對比檢查。手機幀率與電話引擎仍待實機驗證。
+- 修正「重新套用已存方案」漏掉已停用方案的問題。前景會定期更新狀態，分開顯示部分生效與完整確認，讓過期的回報退出成功狀態。
+- App 儲存與單卡重套時核對畫面最初讀到的 SIM。偵測到換卡時，模組會拒絕舊請求，App 也會在讀到新卡後清除上一張卡的草稿。
+- 外觀偏好成功讀取後才開放修改，返回前景或手動重新讀取時再載入偏好。儲存顯示以模組核對過的回覆為準。
+- 還原確認需要中央電話回應方案清除成功，並讀回兩項非持久屬性的原本值。多卡電信商名稱合併後超出系統位元組限制時，介面會提示縮短名稱。
+
+延續 0.8.0 的 Miuix、Backdrop 與程序化 3D 場景。KernelSU 正式引擎的真機套用與還原仍待驗證。
+
+- Fixed Reapply Saved Plans skipping stopped plans. The app updates status while in the foreground, distinguishes partial application from full confirmation and expires stale confirmations.
+- The app ties saves and single-SIM reapplication to the SIM it read for the editor. The module rejects a stale request when it detects a swap, and the app drops the previous SIM's draft when it reads the replacement.
+- Appearance settings become editable after a successful read and are read again when the app returns to the foreground or you refresh manually. The app reports a save when the module acknowledges the matching preferences.
+- A restore needs a successful clear of the central phone response plan and a readback of both temporary properties. The app asks for shorter carrier names when their combined byte length exceeds Android's limit.
+
+This version carries forward the Miuix, Backdrop and procedural 3D design from 0.8.0. Applying and restoring through the production KernelSU phone engine still require handset validation.
+
+## 0.8.0 — 公開預覽 / Public preview
+
+完整替換前端視覺與跨頁體驗，於 2026 年 11 月 20 日公開預覽。RTX 3060 加速的 60 Hz Android 模擬器已繪製四頁場景。修正版底欄選中文字在深淺主題中通過原生像素對比檢查。手機幀率與電話引擎仍待實機驗證。
 
 - 新增 TextureView／EGL／GLES3 程序化 mesh 與 PBR／FBO 材質管線，四個有機模型在頁面間持續移動與變形，配合彈簧輸入與深度捲動。
 - 模型、光源與 Miuix／Backdrop 共用目前色彩角色，經低彩度表面與小面積強調色分配；隨附 Manrope variable 字型與 OFL，CJK 使用系統 fallback。
@@ -13,7 +29,7 @@
 - 在液態玻璃指示塊上方重繪選中的文字和圖示，維持對比。沿用原有的分頁點擊區與無障礙焦點。
 - 首次使用採紫羅蘭 Expressive 並跟隨系統明暗。Google Monet 可在設定開啟，更新會沿用既有偏好。
 
-The rebuilt frontend remains unpublished. The app drew all four scenes on a 60 Hz Android emulator accelerated by an RTX 3060. Pixel samples confirmed selected navigation label contrast in light and dark themes. Handset frame timing and phone engine validation are pending.
+The rebuilt frontend was published as a preview on 20 November 2026. The app drew all four scenes on a 60 Hz Android emulator accelerated by an RTX 3060. Pixel samples confirmed selected navigation label contrast in light and dark themes. Handset frame timing and phone engine validation are pending.
 
 - Added a TextureView/EGL/GLES3 procedural-mesh and PBR/FBO pipeline, with four persistent organic models, page morphing, spring input and depth-dependent scrolling.
 - Models, lighting, Miuix and Backdrop share the selected roles through quiet surfaces and small accents. Manrope variable fonts and OFL are bundled, with system CJK fallback.

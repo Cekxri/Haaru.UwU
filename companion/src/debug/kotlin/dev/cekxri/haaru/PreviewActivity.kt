@@ -1,12 +1,14 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 package dev.cekxri.haaru
 
+import android.app.Application
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +22,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import haaru.ui.Appearance
 import haaru.ui.UiBridge
 import haaru.ui.UiPreferences
@@ -27,16 +31,17 @@ import kotlinx.serialization.json.*
 
 /** Debug-only rendering entry point. It cannot contact or alter a phone module. */
 class PreviewActivity : ComponentActivity() {
+    private val model by viewModels<PreviewActivityModel>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
-        val bridge = PreviewBridge()
         setContent {
             Box(Modifier.fillMaxSize()) {
-                HaaruApp(bridge)
+                HaaruApp(model.bridge, model.preferences)
                 BasicText(
                     "介面預覽 · 模擬資料",
                     modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding()
@@ -50,17 +55,22 @@ class PreviewActivity : ComponentActivity() {
     }
 }
 
+internal class PreviewActivityModel(application: Application) : AndroidViewModel(application) {
+    val bridge: UiBridge = PreviewBridge(application)
+    val preferences = AppearancePreferences(viewModelScope, bridge)
+}
+
 /** Preview data and appearance choices live only in RAM; SIM commands are refused. */
-private class PreviewBridge : UiBridge {
+private class PreviewBridge(private val application: Application) : UiBridge {
     override val connected = true
     override val systemDark = true
-    override val systemReducedMotion = false
+    override val systemReducedMotion: Boolean get() = application.systemMotionRemoved()
     private var appearance = UiPreferences(appearance = Appearance.DARK).encode()
 
-    override fun loadPreferences(): String = appearance
-    override fun savePreferences(value: String) { appearance = value }
+    override suspend fun readPreferences(): String = appearance
+    override suspend fun writePreferences(value: String) { appearance = decodeStoredPreferences(value).encode() }
 
-    override suspend fun command(action: String, slot: Int, country: String, carrier: String): String {
+    override suspend fun command(action: String, slot: Int, country: String, carrier: String, selectionToken: String): String {
         if (action != "status") return buildJsonObject {
             put("ok", false)
             put("verified", false)
@@ -81,6 +91,7 @@ private class PreviewBridge : UiBridge {
                 for ((index, iso) in listOf("GB", "JP").withIndex()) addJsonObject {
                     put("slot", index)
                     put("subId", index + 1)
+                    put("selectionToken", (index + 1).toString().repeat(64))
                     put("country", iso)
                     put("configCountry", "")
                     put("carrierName", "Preview SIM ${if (index == 0) "A" else "B"}")

@@ -1,32 +1,26 @@
-# Haaru 0.8.0 發佈準備
+# Haaru 0.8.1 發佈準備
 
-**0.8.0（versionCode 15）是尚未公開的本機候選。** 已取得 Android 模擬器的 3D 渲染、明暗主題與選中文字對比證據。手機效能和電話引擎仍待實機驗證，`deviceTested=false`。0.7.3 的 ZIP、APK 和來源封裝屬於歷史候選。
+**0.8.1（versionCode 16）為公開預覽版。** 這版修正 SIM 方案、外觀保存和引擎確認，延續 0.8.0 公開預覽版的 Miuix、Backdrop 和 GLES3 場景。既有模擬器畫面與效能樣本來自 0.8.0。手機效能和 KernelSU 電話引擎仍待實機驗證，`deviceTested=false`。
 
 ## 交付檔案
 
 | 檔案 | 用途 |
 | --- | --- |
-| `Haaru-0.8.0.zip` | KSU 模組與同版本已簽 APK；安裝完成後完整重啟 |
-| `Haaru-0.8.0.apk` | 原生 Miuix／GLES3 配套 App，同 package／簽章更新 |
-| `Haaru-0.8.0-source.zip` | 白名單 source，排除私人簽章／診斷／設定 |
+| `Haaru-0.8.1.zip` | KSU 模組與同版本已簽 APK；安裝完成後完整重啟 |
+| `Haaru-0.8.1.apk` | 原生 Miuix／GLES3 配套 App，同 package／簽章更新 |
+| `Haaru-0.8.1-source.zip` | 白名單 source，排除私人簽章／診斷／設定 |
 | `SHA256SUMS.txt` | 最終交付檔案校驗值 |
 | build／companion manifests | 實際來源／工具／版本／產物／簽章指紋 |
 | release-verification／device-report | 分開記錄發佈驗證與當前真機 scope |
 
 ZIP 的同版 App 自動安裝與 Android 未就緒時開機續裝保留；KSU 執行按鈕開啟 App 或重試安裝 ZIP 內 APK，不向 latest 取錯版本。App 無需單獨 superuser 授權，模組 IPC 以真實 peer UID／package UID／APK signer 核對身份並只接受固定操作。
 
-## 0.8.0 變更
+## 0.8.1 變更
 
-- 以 TextureView、EGL、GLES 3 和程序化網格建立持續四模型場景。切頁時沿原拓撲移動與形變，配合觸摸回彈、細微漂浮與視差捲動。以 PBR 材質、逐物件背面深度、景深與克制的局部自發光表現形體。
-- Miuix／Backdrop／模型／燈光共用選中色彩角色，經低彩度表面與小強調色分配；隨附 Manrope variable 字型與 OFL，CJK 系統 fallback。沒有套用 Material 3 預設控件或舊 Canvas 咖啡杯／固定紫色 About 主視覺。
-- 底欄在玻璃指示塊上重繪選中的文字和圖示，保留原分頁按鈕的點擊與無障礙行為。
-- 首次使用採紫羅蘭 Expressive 並跟隨系統明暗。Google Monet 可在設定開啟，已儲存的新舊偏好沿用原有行為。
-- 依顯示器 vsync 提交畫面，不設 120 fps 上限。品質分級、省電、溫度、減少動畫和視窗生命週期都參與渲染控制。
-- 保留逐卡草稿、set／重套、reset／disable 保留方案、forget／clear 刪SIM方案，以及預設收起診斷、偏好與授權全文。
-- 啟用方案空字段保留已存值，UI 明示保留；完整回原始仍使用 reset。SIM 回報國家可能使用 getter fallback，不一律稱 original。RAM草稿動作明示載入已啟用方案／清空未儲存草稿。
-- 繼續保留電話引擎原 FD 清單與 specialisation 後同 socket／protocol 驗證，沒有把 `exemptFd` 回傳當作無條件 fatal。
-
-雕塑折射自身 GL 場景，底欄由 Backdrop 取樣即時原生背景。RTX 3060 加速的 60 Hz 模擬器記錄了 GLES 3.1 四頁渲染，暖機提交約 57.5–60 Hz，CPU 提交約 0.63–2.99 ms。這組效能數字來自 `f6937975`，目前尚無手機的實際呈現幀率。
+- 「重新套用已存方案」會重新啟用曾停用的方案。App 將部分生效、全域確認與過期回報分開呈現。
+- SIM 儲存和單卡重套請求綁定畫面讀到的 SIM。模組偵測到換卡會拒絕舊請求。讀到新卡後，App 清除上一張卡的草稿，並依目前 SIM 身分判斷可預填或重套的方案。
+- 外觀偏好首次讀取成功後才開放修改，在返回前景或手動重新讀取時再載入。儲存成功以模組核對過的回覆為準。
+- 模組確認中央回應方案清除成功，並讀回兩項非持久屬性的原值，才能回報還原完成。多卡電信商名稱合計超出系統位元組限制時，介面提示縮短名稱。
 
 ## 最終建置與驗證
 
@@ -39,10 +33,10 @@ python build_native.py
 python build_companion.py --java-home "C:/path/to/jdk-21"
 python build.py
 python verify_release.py
-python privacy_guard.py --artifact dist/Haaru-0.8.0.zip --artifact dist/Haaru-0.8.0.apk --artifact dist/Haaru-0.8.0-source.zip --output dist/publication-privacy-audit.json
+python privacy_guard.py --artifact dist/Haaru-0.8.1.zip --artifact dist/Haaru-0.8.1.apk --artifact dist/Haaru-0.8.1-source.zip --output dist/publication-privacy-audit.json
 ```
 
-目前 App 通過 30 項主機測試。回歸與封裝檢查涵蓋 State、Controller、adapter、hook、Rust、native、IPC、安裝及更新流程、預設資料、偏好與色彩。原生預覽使用 1440 × 3200、530 dpi 的本機合成資料，透過來源指紋對應 debug 與 release。底欄修正版 `bbc739e8` 的六組深淺主題選中文字像素對比為 11.57–13.68:1。封裝時以 `dist/SHA256SUMS.txt`、`dist/release-verification.json` 和 `dist/publication-privacy-audit.json` 核對對應版本的模組 ZIP、APK 與來源封裝。
+在 PATH 設定 JDK 21，供整包建置與 APK 驗證共用。以當次主機測試報告與 `dist/SHA256SUMS.txt`、`dist/release-verification.json`、`dist/publication-privacy-audit.json` 核對模組 ZIP、APK 與來源封裝。核對 ZIP 內的 APK 和獨立 APK 完全一致，以及簽章憑證與上一個已發佈版本相同。0.8.0 模擬器的來源指紋和數據見 [原生介面建置](UI_BUILD.md)。
 
 `--skip-tests` 產物僅供開發；真實 aapt2／apksigner、來源hash與 APK／ZIP／source 交叉核對必須匹配最後修改。正式 `companion.prop` pin 由已驗證 APK 的公開package／certificateSHA256／protocol生成，更新同簽章App沒有versionCode鎖。
 

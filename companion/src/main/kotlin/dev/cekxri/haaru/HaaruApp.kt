@@ -4,6 +4,10 @@ package dev.cekxri.haaru
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
@@ -47,10 +51,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import haaru.ui.*
-import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -59,21 +63,34 @@ private data class Picker(val title: String, val options: List<Pair<String, Stri
 private data class Confirmation(val title: String, val message: String, val confirm: () -> Unit)
 
 @Composable
-fun HaaruApp(bridge: UiBridge) {
+internal fun HaaruApp(bridge: UiBridge, appearancePreferences: AppearancePreferences) {
     val scope = rememberCoroutineScope()
     val state = remember(bridge) { HaaruState(bridge, scope) }
-    val loadedPreferences = bridge.loadPreferences()
-    var preferences by remember(bridge) { mutableStateOf(UiPreferences.decode(loadedPreferences)) }
+    val appearanceState by appearancePreferences.state.collectAsState()
+    val preferences = appearanceState.value
     var page by rememberSaveable { mutableIntStateOf(0) }
     var selectedSlot by rememberSaveable { mutableIntStateOf(0) }
     var picker by remember { mutableStateOf<Picker?>(null) }
     var colourPicker by remember { mutableStateOf(false) }
     var confirmation by remember { mutableStateOf<Confirmation?>(null) }
-    var preferenceNotice by remember { mutableStateOf("") }
+    val preferenceFailure = appearanceState.phase == PreferencePhase.READ_FAILED || appearanceState.phase == PreferencePhase.SAVE_FAILED
+    val preferenceNotice = when {
+        appearanceState.phase == PreferencePhase.READING -> "正在讀取外觀設定…"
+        appearanceState.phase == PreferencePhase.SAVING -> "正在儲存外觀設定…"
+        appearanceState.phase == PreferencePhase.SAVED -> "外觀已儲存。"
+        appearanceState.phase == PreferencePhase.READ_FAILED -> "無法讀取外觀設定，請重新讀取。"
+        appearanceState.phase == PreferencePhase.SAVE_FAILED -> "無法確認外觀是否已儲存，請重新讀取。"
+        state.snapshot.upgradePending -> "請重新啟動手機以完成模組更新。"
+        state.snapshot.readOnly -> "模組目前唯讀，請先確認 Haaru 已啟用。"
+        else -> ""
+    }
     val context = LocalContext.current
     val view = LocalView.current
     val activity = remember(view.context) { view.context.haaruActivity() }
-    var foreground by remember { mutableStateOf(true) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var foreground by remember(lifecycle) { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    var systemReducedMotion by remember(bridge) { mutableStateOf(bridge.systemReducedMotion) }
+    val preferenceEditable = foreground && appearanceState.editable && !state.snapshot.readOnly && !state.snapshot.upgradePending
     val scene = remember(context) { SculptureController(context) }
     val density = LocalDensity.current.density
     val scrollOffsets = remember { FloatArray(4) }
@@ -84,16 +101,28 @@ fun HaaruApp(bridge: UiBridge) {
         Appearance.DARK -> true
         Appearance.LIGHT -> false
     }
-    val reduced = preferences.reduceMotion || bridge.systemReducedMotion
+    val reduced = preferences.reduceMotion || systemReducedMotion
     BackHandler(enabled = page == 3) { page = 2 }
-    DisposableEffect(scene, activity) {
-        val owner = activity as? androidx.lifecycle.LifecycleOwner
-        val observer = LifecycleEventObserver { source, _ ->
-            foreground = source.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+    DisposableEffect(lifecycle, appearancePreferences) {
+        val observer = LifecycleEventObserver { source, event ->
+            foreground = source.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            if (event == Lifecycle.Event.ON_RESUME) appearancePreferences.reread()
         }
-        owner?.lifecycle?.addObserver(observer)
-        onDispose { owner?.lifecycle?.removeObserver(observer); scene.close() }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
     }
+    DisposableEffect(context, bridge, foreground) {
+        val resolver = context.contentResolver
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) { systemReducedMotion = bridge.systemReducedMotion }
+        }
+        if (foreground) {
+            resolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
+            systemReducedMotion = bridge.systemReducedMotion
+        }
+        onDispose { if (foreground) resolver.unregisterContentObserver(observer) }
+    }
+    DisposableEffect(scene) { onDispose { scene.close() } }
     SideEffect {
         activity?.let {
             val controller = WindowCompat.getInsetsController(it.window, view)
@@ -101,25 +130,17 @@ fun HaaruApp(bridge: UiBridge) {
             controller.isAppearanceLightNavigationBars = !dark
         }
     }
-    fun update(value: UiPreferences) {
-        if (state.snapshot.readOnly || state.snapshot.upgradePending) {
-            preferenceNotice = if (state.snapshot.upgradePending) "更新完成後，請重新啟動手機再操作。"
-                else "模組目前唯讀，請先確認 Haaru 已啟用。"
-            return
-        }
-        preferences = value
-        try {
-            bridge.savePreferences(value.encode())
-            scope.launch {
-                bridge.flushPreferences()
-                preferenceNotice = if (bridge.preferenceError == null) "外觀已儲存。" else "外觀尚未儲存，請重新試一次。"
-            }
-        } catch (_: Exception) { preferenceNotice = "外觀尚未儲存，請重新試一次。" }
+    fun update(change: (UiPreferences) -> UiPreferences) {
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+            !state.snapshot.readOnly && !state.snapshot.upgradePending) appearancePreferences.update(change)
     }
-    LaunchedEffect(loadedPreferences) {
-        if (loadedPreferences != null) preferences = UiPreferences.decode(loadedPreferences)
+    fun reread() {
+        state.run("status")
+        appearancePreferences.reread()
     }
-    LaunchedEffect(bridge) { state.run("status") }
+    LaunchedEffect(state, foreground) {
+        if (foreground) state.monitorStatus() else state.invalidateStatus()
+    }
     LaunchedEffect(state.snapshot.cards) {
         if (state.snapshot.cards.none { it.slot == selectedSlot }) selectedSlot = state.snapshot.cards.firstOrNull()?.slot ?: 0
     }
@@ -190,7 +211,7 @@ fun HaaruApp(bridge: UiBridge) {
                                 contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp,
                                     bottom = if (expanded) 30.dp + bottom else 104.dp + bottom),
                                 verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                                item("header") { NativePageHeader(currentPage, state) }
+                                item("header") { NativePageHeader(currentPage, state, ::reread) }
                                 if (!expanded) item("sculpturalSpace") { Spacer(Modifier.height(192.dp)) }
                                 item("context") { PageContext(currentPage, state) }
                                 when (currentPage) {
@@ -201,7 +222,7 @@ fun HaaruApp(bridge: UiBridge) {
                                             HaaruCard(UiStyle.MIUIX) {
                                                 Text("沒有可用的 SIM", color = colours.onSurface, fontWeight = FontWeight.SemiBold)
                                                 Text("插入 SIM 後重新讀取，這裡會顯示可編輯的卡片。", color = colours.onSurfaceVariant)
-                                                HaaruButton(UiStyle.MIUIX, "重新讀取", !state.busy, secondary = true) { state.run("status") }
+                                                HaaruButton(UiStyle.MIUIX, "重新讀取", !state.busy, secondary = true, onClick = ::reread)
                                             }
                                         }
                                         if (state.snapshot.cards.isNotEmpty()) {
@@ -233,23 +254,25 @@ fun HaaruApp(bridge: UiBridge) {
                                     1 -> {
                                         if (state.notice.isNotBlank()) item("notice") { InlineNotice(state.notice, state.failed) }
                                         item("tools") {
-                                            ToolsPanel(state, bridge.preferenceError.orEmpty()) { title, message, action ->
+                                            ToolsPanel(state, preferenceNotice.takeIf { appearanceState.phase == PreferencePhase.SAVE_FAILED }.orEmpty()) { title, message, action ->
                                                 confirmation = Confirmation(title, message, action)
                                             }
                                         }
                                     }
                                     2 -> {
                                         item("appearance") {
-                                            AppearancePanel(preferences, state,
+                                            AppearancePanel(preferences, preferenceEditable,
                                                 onAppearance = { picker = Picker("明暗", Appearance.entries.map { it.name to appearanceName(it) },
-                                                    preferences.appearance.name) { update(preferences.copy(appearance = Appearance.valueOf(it))) } },
+                                                    preferences.appearance.name) { key -> update { it.copy(appearance = Appearance.valueOf(key)) } } },
                                                 onStyle = { picker = Picker("色彩風格", ColourStyle.entries.map { it.name to colourStyleName(it) },
-                                                    preferences.colourStyle.name) { update(preferences.copy(colourStyle = ColourStyle.valueOf(it))) } },
+                                                    preferences.colourStyle.name) { key -> update { it.copy(colourStyle = ColourStyle.valueOf(key)) } } },
                                                 onPalette = { colourPicker = true }, onUpdate = ::update)
                                         }
-                                        if (preferenceNotice.isNotBlank() || bridge.preferenceError != null) item("preferenceNotice") {
-                                            InlineNotice(if (bridge.preferenceError != null) "外觀尚未儲存，等模組服務連上後再試。" else preferenceNotice,
-                                                bridge.preferenceError != null)
+                                        if (preferenceNotice.isNotEmpty()) item("preferenceNotice") {
+                                            Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+                                                InlineNotice(preferenceNotice, preferenceFailure)
+                                                if (preferenceFailure) HaaruTextButton(::reread) { Text("重新讀取") }
+                                            }
                                         }
                                         item("about") { AboutInformation(state.snapshot.moduleVersion) { page = 3 } }
                                     }
@@ -269,7 +292,7 @@ fun HaaruApp(bridge: UiBridge) {
                 }
                 if (colourPicker) ManualColourSheet(preferences, reduced, { colourPicker = false }) { palette, custom ->
                     colourPicker = false
-                    update(preferences.copy(palette = palette, customColour = custom, dynamicColour = false))
+                    update { it.copy(palette = palette, customColour = custom, dynamicColour = false) }
                 }
                 confirmation?.let { request ->
                     HaaruConfirmationDialog(request.title, request.message, reduced,
@@ -281,7 +304,7 @@ fun HaaruApp(bridge: UiBridge) {
 }
 
 @Composable
-private fun NativePageHeader(page: Int, state: HaaruState) {
+private fun NativePageHeader(page: Int, state: HaaruState, reread: () -> Unit) {
     val c = HaaruTheme.colours
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -290,7 +313,7 @@ private fun NativePageHeader(page: Int, state: HaaruState) {
             Text(if (page == 0) "城堡之下的SIM國度.咖啡廳☕" else "Haaru · ${state.snapshot.moduleVersion.ifBlank { BuildConfig.VERSION_NAME }}",
                 fontSize = 12.sp, lineHeight = 18.sp, color = c.onSurfaceVariant)
         }
-        IconButton(onClick = { state.run("status") }, enabled = !state.busy, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = reread, enabled = !state.busy, modifier = Modifier.size(48.dp)) {
             if (state.busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             else Icon(HaaruIcons.Refresh, "重新讀取模組", Modifier.size(23.dp), tint = c.onSurface)
         }
@@ -315,10 +338,9 @@ private fun PageContext(page: Int, state: HaaruState) {
 }
 
 @Composable
-private fun AppearancePanel(preferences: UiPreferences, state: HaaruState, onAppearance: () -> Unit,
-                            onStyle: () -> Unit, onPalette: () -> Unit, onUpdate: (UiPreferences) -> Unit) {
+private fun AppearancePanel(preferences: UiPreferences, enabled: Boolean, onAppearance: () -> Unit,
+                            onStyle: () -> Unit, onPalette: () -> Unit, onUpdate: ((UiPreferences) -> UiPreferences) -> Unit) {
     val c = HaaruTheme.colours
-    val enabled = !state.snapshot.readOnly && !state.snapshot.upgradePending
     HaaruCard(UiStyle.MIUIX) {
         SelectionRow("明暗", appearanceName(preferences.appearance), HaaruIcons.Cup, enabled, onAppearance)
         HorizontalDivider(color = c.outlineVariant)
@@ -327,16 +349,16 @@ private fun AppearancePanel(preferences: UiPreferences, state: HaaruState, onApp
             if (LocalDynamicColourActive.current) "正在使用系統桌布色彩"
             else if (!preferences.dynamicColour) "已關閉，可選擇手動色彩"
             else "系統未提供桌布色彩，使用手動配色", preferences.dynamicColour, enabled) {
-            onUpdate(preferences.copy(dynamicColour = it))
+            checked -> onUpdate { it.copy(dynamicColour = checked) }
         }
         SelectionRow("手動色彩", if (preferences.customColour.isNotEmpty()) preferences.customColour else paletteName(preferences.palette),
             HaaruIcons.Globe, enabled && !preferences.dynamicColour, onPalette)
         HorizontalDivider(color = c.outlineVariant)
         SettingSwitch(UiStyle.MIUIX, "液態玻璃導航", "背景取樣與折射", preferences.glass, enabled) {
-            onUpdate(preferences.copy(glass = it))
+            checked -> onUpdate { it.copy(glass = checked) }
         }
         SettingSwitch(UiStyle.MIUIX, "減少動態效果", "停止模型漂浮，直接切換畫面", preferences.reduceMotion, enabled) {
-            onUpdate(preferences.copy(reduceMotion = it))
+            checked -> onUpdate { it.copy(reduceMotion = checked) }
         }
     }
 }
