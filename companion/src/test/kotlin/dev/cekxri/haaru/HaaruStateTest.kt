@@ -107,7 +107,7 @@ class HaaruStateTest {
     }
     @Test fun connectedModuleCanReportDisconnectedPhoneEngineWithoutClaimingIpcFailure() {
         val engine = friendlyEngineError("Phone engine disconnected")
-        assertEquals("電話引擎已斷線，請更新模組並重新啟動手機。", engine)
+        assertEquals("電話引擎尚未連上，請到工具頁查看原因。", engine)
         assertFalse(engine.contains("模組服務尚未連接"))
         assertEquals(engine, friendlyError("Phone engine disconnected"))
         assertNotEquals(engine, friendlyError("socket not created"))

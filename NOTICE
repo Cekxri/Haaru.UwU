@@ -29,20 +29,36 @@ See build.py for its URL and pinned SHA-256.
 
 The native Android companion uses:
 - Miuix 0.9.4, compose-miuix-ui contributors, Apache-2.0.
-- AndroidX Compose and Material 3, Google Android Open Source Project,
+- AndroidX Compose, Google Android Open Source Project,
   Apache-2.0.
 - Backdrop 2.0.1 (AndroidLiquidGlass), Kyant and contributors, Apache-2.0.
-- Material Color Utilities 5.0.1, Google/MaterialKolor contributors, Apache-2.0.
+- Shapes 1.2.1, Kyant and contributors, Apache-2.0.
+- Material Color Utilities algorithms, Google contributors, Apache-2.0.
+- MaterialKolor material-color-utilities 6.0.0, Jordon de Hoog and contributors,
+  MIT, as declared in the published artefact metadata.
 - Kotlin and kotlinx libraries, their respective contributors, Apache-2.0.
+The interface uses Miuix only; earlier appearance values are retained for
+settings compatibility, not as an alternative UI.
+
+Glass navigation adapts public AndroidLiquidGlass catalogue components including
+LiquidBottomTabs, LiquidBottomTab, DampedDragAnimation, DragGestureInspector,
+InteractiveHighlight and related helpers, by Kyant and
+contributors, under Apache-2.0. Reviewed public source commit:
+eb4a0ea2e17542ea28c2e71088f7dd9acf77aad5
+https://github.com/Kyant0/AndroidLiquidGlass/tree/eb4a0ea2e17542ea28c2e71088f7dd9acf77aad5
+Changes include Miuix integration, the three-tab layout, gesture cancellation,
+bounded glass effects, animation job disposal and reduced-motion handling.
+
 Additional licence texts are in module/third-party-licenses/ and
 module/native-licenses/ in the source tree. The App uses system fonts.
 
 The central native engine includes:
 - Zygisk API 4 header, John Wu / Magisk contributors, permissive header licence
   reproduced verbatim in native-licenses/Zygisk_API_LICENSE.txt.
-- LSPlant, LSPosed contributors, Apache-2.0, pinned official source
+- LSPlant, LSPosed contributors, LGPL-3.0, pinned official source
   d8b5d1dbb664abc606644036822e4bb64547edf6.
-- DexBuilder and AOSP Slicer, their contributors, Apache-2.0; DexBuilder pin
+- DexBuilder, LSPosed contributors, LGPL-3.0; its AOSP Slicer sources retain
+  their Apache-2.0 notices. DexBuilder pin
   ac7fb2230954ee311808bad469b0db501f31bfb8.
 - parallel-hashmap, Greg Popovitch and contributors, Apache-2.0.
 - Dobby Android static prefab io.github.vvb2060.ndk:dobby:1.2,
@@ -77,3 +93,8 @@ Haaru is maintained by Cekxri. The public source includes no live device
 configuration, diagnostic captures or signing private keys. Root execution
 belongs to the module, with a signer-authenticated companion App connection.
 The repository is https://github.com/Cekxri/Haaru.UwU.
+
+- Manrope variable font, Mikhail Sharanda and contributors, SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/manrope
+  Font SHA256: 3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6
+  Full licence: companion/src/main/assets/licences/Manrope-OFL.txt

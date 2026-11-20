@@ -6,7 +6,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import top.yukonga.miuix.kmp.basic.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +31,7 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
 import haaru.ui.UiStyle
+import haaru.ui.HaaruTheme
 import top.yukonga.miuix.kmp.basic.Button as MiButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card as MiCard
@@ -43,17 +44,10 @@ internal val LocalHaaruReducedMotion = staticCompositionLocalOf { false }
 
 @Composable
 internal fun HaaruCard(style: UiStyle, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    when (style) {
-        UiStyle.MIUIX -> MiCard(
-            modifier = modifier.fillMaxWidth(), cornerRadius = 24.dp,
-            insideMargin = PaddingValues(16.dp),
-            colors = MiCardDefaults.defaultColors(colors.surfaceContainer, colors.onSurface)
-        ) { Column(verticalArrangement = Arrangement.spacedBy(12.dp), content = content) }
-        UiStyle.MATERIAL3 -> Card(
-            modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.surfaceContainer)
-        ) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content) }
+    val colours = HaaruTheme.colours
+    MiCard(modifier = modifier.fillMaxWidth(), cornerRadius = 20.dp, insideMargin = PaddingValues(18.dp),
+        colors = MiCardDefaults.defaultColors(colours.surfaceContainer, colours.onSurface)) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
     }
 }
 
@@ -65,62 +59,66 @@ internal fun HaaruButton(style: UiStyle, label: String, enabled: Boolean = true,
     val reduced = LocalHaaruReducedMotion.current
     val scale by animateFloatAsState(if (pressed && !reduced) .97f else 1f,
         if (reduced) snap() else spring(dampingRatio = .75f, stiffness = 650f), label = "buttonPress")
-    val feedback = modifier.graphicsLayer { scaleX = scale; scaleY = scale }
-    when (style) {
-        UiStyle.MIUIX -> MiButton(onClick = onClick, enabled = enabled, minHeight = 48.dp, modifier = feedback,
-            interactionSource = interaction,
-            colors = if (secondary) MiButtonDefaults.buttonColors() else MiButtonDefaults.buttonColorsPrimary()) {
-            Text(label, fontWeight = FontWeight.SemiBold,
-                color = if (!enabled) MiuixTheme.colorScheme.disabledOnPrimaryButton
-                    else if (secondary) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onPrimary)
-        }
-        UiStyle.MATERIAL3 -> if (secondary) FilledTonalButton(onClick, feedback.heightIn(min = 48.dp), enabled = enabled, interactionSource = interaction) { Text(label) }
-            else Button(onClick, feedback.heightIn(min = 48.dp), enabled = enabled, interactionSource = interaction) { Text(label) }
+    MiButton(onClick = onClick, enabled = enabled, minHeight = 52.dp, cornerRadius = 16.dp,
+        modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale }, interactionSource = interaction,
+        colors = if (secondary) MiButtonDefaults.buttonColors() else MiButtonDefaults.buttonColorsPrimary()) {
+        Text(label, fontWeight = FontWeight.SemiBold,
+            color = if (!enabled) MiuixTheme.colorScheme.disabledOnPrimaryButton
+                else if (secondary) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onPrimary)
     }
 }
 
 @Composable
 internal fun HaaruField(style: UiStyle, value: String, label: String, modifier: Modifier = Modifier,
                         onChange: (String) -> Unit) {
-    when (style) {
-        UiStyle.MIUIX -> MiField(value = value, onValueChange = onChange, label = label,
-            singleLine = true, modifier = modifier.fillMaxWidth().semantics { contentDescription = label })
-        UiStyle.MATERIAL3 -> OutlinedTextField(value, onChange, label = { Text(label) }, singleLine = true,
-            modifier = modifier.fillMaxWidth().semantics { contentDescription = label }, shape = RoundedCornerShape(16.dp))
-    }
+    MiField(value = value, onValueChange = onChange, label = label, singleLine = true,
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = label })
 }
 
 @Composable
 internal fun SettingSwitch(style: UiStyle, title: String, subtitle: String, checked: Boolean,
                            enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
-            if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall)
+            Text(title, color = HaaruTheme.colours.onSurface, style = MiuixTheme.textStyles.main)
+            if (subtitle.isNotBlank()) Text(subtitle, color = HaaruTheme.colours.onSurfaceVariant,
+                style = MiuixTheme.textStyles.footnote1)
         }
-        // Restart just the switch at its target when reduced motion is requested.
-        // Library-provided thumb springs otherwise keep their normal native behaviour.
-        key(if (LocalHaaruReducedMotion.current) checked else Unit) { when (style) {
-            UiStyle.MIUIX -> MiSwitch(checked = checked, onCheckedChange = onChange, enabled = enabled,
+        key(if (LocalHaaruReducedMotion.current) checked else Unit) {
+            MiSwitch(checked = checked, onCheckedChange = onChange, enabled = enabled,
                 modifier = Modifier.semantics { contentDescription = title })
-            UiStyle.MATERIAL3 -> Switch(checked, onChange, enabled = enabled,
-                modifier = Modifier.semantics { contentDescription = title })
-        } }
+        }
+    }
+}
+
+@Composable
+internal fun HaaruTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+                             content: @Composable RowScope.() -> Unit) {
+    MiButton(onClick = onClick, modifier = modifier, enabled = enabled, minHeight = 48.dp,
+        cornerRadius = 14.dp, colors = MiButtonDefaults.buttonColors(color = Color.Transparent,
+            contentColor = HaaruTheme.colours.primary, disabledColor = Color.Transparent), content = content)
+}
+
+@Composable
+internal fun HaaruSimChip(selected: Boolean, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
+    val colours = HaaruTheme.colours
+    MiButton(onClick = onClick, minHeight = 48.dp, cornerRadius = 16.dp,
+        modifier = Modifier.semantics { this.selected = selected },
+        colors = MiButtonDefaults.buttonColors(color = if (selected) colours.primaryContainer else colours.surfaceContainerHigh,
+            contentColor = if (selected) colours.onPrimaryContainer else colours.onSurface)) {
+        content()
     }
 }
 
 @Composable
 internal fun SelectionRow(title: String, value: String, icon: ImageVector, enabled: Boolean = true, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
+    val colors = HaaruTheme.colours
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(enabled = enabled, onClick = onClick)
-        .heightIn(min = 60.dp).padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(21.dp), tint = colors.primary)
-        Spacer(Modifier.width(12.dp))
+        .heightIn(min = 68.dp).padding(horizontal = 2.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
-            Text(value, color = colors.onSurface, style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, color = colors.onSurfaceVariant, style = MiuixTheme.textStyles.footnote1)
+            Text(value, color = colors.onSurface, style = MiuixTheme.textStyles.main,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Icon(HaaruIcons.Chevron, null, Modifier.size(20.dp), tint = colors.onSurfaceVariant)
     }
@@ -128,8 +126,8 @@ internal fun SelectionRow(title: String, value: String, icon: ImageVector, enabl
 
 @Composable
 internal fun SectionTitle(label: String) {
-    Text(label, Modifier.padding(start = 4.dp, top = 6.dp), style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(label, Modifier.padding(start = 4.dp, top = 6.dp), style = MiuixTheme.textStyles.button,
+        color = HaaruTheme.colours.onSurfaceVariant)
 }
 
 /** One recorded page layer is sampled by this small nav surface, never by itself. */

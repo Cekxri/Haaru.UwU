@@ -111,6 +111,13 @@ def validate_dex(data):
         raise ValueError("DEX signature mismatch")
 
 
+def validate_companion_release_dex(data):
+    """Keep the debug-only rendering entry point out of distributed APKs."""
+    validate_dex(data)
+    if any(name in data for name in (b"Ldev/cekxri/haaru/PreviewActivity;", b"Ldev/cekxri/haaru/PreviewBridge;")):
+        raise ValueError("Release APK contains the debug-only interface preview")
+
+
 def validate_backend_dex(data):
     """The SDK-free root backend must not depend on JVM bootstrap facilities."""
     validate_dex(data)
@@ -258,7 +265,7 @@ def validate_companion(root, version, version_code):
         if not dex_names:
             raise ValueError("Companion APK has no Android DEX")
         for entry in dex_names:
-            validate_dex(archive.read(entry))
+            validate_companion_release_dex(archive.read(entry))
     aapt, signer = build_tools(root, manifest)
     badging = run_tool(root, aapt, ["dump", "badging", apk])
     package = re.search(r"^package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", badging, re.M)

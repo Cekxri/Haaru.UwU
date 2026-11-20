@@ -227,6 +227,7 @@ fn validate_appearance(bytes: &[u8]) -> Result<(), String> {
             "style" => matches!(value.as_str(), Some("MIUIX" | "MATERIAL3")),
             "appearance" => matches!(value.as_str(), Some("SYSTEM" | "LIGHT" | "DARK")),
             "palette" => matches!(value.as_str(), Some("VIOLET" | "LAVENDER" | "WISTERIA" | "IRIS" | "PLUM" | "LILAC" | "ORCHID" | "MAUVE" | "PERIWINKLE" | "MINT" | "BLUE" | "ROSE" | "SAGE" | "CAFE" | "SLATE")),
+            "colourStyle" => matches!(value.as_str(), Some("EXPRESSIVE" | "VIBRANT" | "TONAL_SPOT" | "NEUTRAL" | "CMF")),
             "glass" | "reduceMotion" | "dynamicColour" => value.is_boolean(),
             "customColour" => value.as_str().is_some_and(|text| text.is_empty() || (text.len() == 7 && text.starts_with('#') && text.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit))),
             _ => false,

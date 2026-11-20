@@ -41,6 +41,14 @@ fun manualSeed(preferences: UiPreferences): Color {
     return if (custom.isEmpty()) paletteColour(preferences.palette) else Color((0xFF000000L or custom.drop(1).toLong(16)))
 }
 
+fun colourStyleName(style: ColourStyle): String = when (style) {
+    ColourStyle.EXPRESSIVE -> "Expressive 2025 · 表現力"
+    ColourStyle.VIBRANT -> "Vibrant 2025 · 鮮明"
+    ColourStyle.TONAL_SPOT -> "Tonal Spot 2025 · 柔和"
+    ColourStyle.NEUTRAL -> "Neutral 2025 · 低彩度"
+    ColourStyle.CMF -> "CMF 2026 · 原色與材質"
+}
+
 data class HsvColour(val hue: Float, val saturation: Float, val brightness: Float) {
     fun colour(): Color = Color.hsv(hue.coerceIn(0f, 360f), saturation.coerceIn(0f, 1f), brightness.coerceIn(0f, 1f))
     fun hex(): String = String.format(Locale.ROOT, "#%06X", colour().toArgb() and 0xFFFFFF)

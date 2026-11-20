@@ -12,8 +12,8 @@ android {
         applicationId = "dev.cekxri.haaru"
         minSdk = 29
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.7.2"
+        versionCode = 15
+        versionName = "0.8.0"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -37,10 +37,10 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.12.0")
     implementation("androidx.compose.foundation:foundation:1.12.0")
     implementation("androidx.compose.animation:animation:1.12.0")
-    implementation("androidx.compose.material3:material3:1.4.0")
-    implementation("com.materialkolor:material-color-utilities:5.0.1")
+    implementation("com.materialkolor:material-color-utilities:6.0.0")
     implementation("top.yukonga.miuix.kmp:miuix-ui:0.9.4")
     implementation("io.github.kyant0:backdrop:2.0.1")
+    implementation("io.github.kyant0:shapes:1.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     debugImplementation("androidx.compose.ui:ui-tooling:1.12.0")

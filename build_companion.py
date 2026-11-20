@@ -105,7 +105,7 @@ def main():
     manifest={'buildMode':'built-and-staged','version':version,'versionCode':version_code,'applicationId':'dev.cekxri.haaru',
         'apkFile':output.name,'apkSha256':digest(output),'apkBytes':output.stat().st_size,'sources':before,'sourceTreeSha256':fingerprint(before),
         'signingCertificateSha256':certificate,'androidBuildTools':'36.0.0','buildToolsPath':'tools/android-sdk/build-tools/36.0.0',
-        'libraries':{'kotlin':'2.4.20','androidGradlePlugin':'9.5.1','androidxCompose':'1.12.0','miuix':'0.9.4','material3':'1.4.0','backdrop':'2.0.1'},
+        'libraries':{'kotlin':'2.4.20','androidGradlePlugin':'9.5.1','androidxCompose':'1.12.0','miuix':'0.9.4','backdrop':'2.0.1','shapes':'1.2.1','materialColorUtilities':'6.0.0'},
         'compileSdk':'37.2','minSdk':29,'targetSdk':36,'hostUnitTests':tested,'hostUnitTestsPassed':True,'deviceTested':False}
     (dist/'companion-build-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
     print('Signed companion:',output.name,output.stat().st_size,'bytes; SHA256',manifest['apkSha256'])

@@ -4,6 +4,7 @@ import kotlinx.serialization.json.*
 
 enum class UiStyle { MIUIX, MATERIAL3 }
 enum class Appearance { SYSTEM, LIGHT, DARK }
+enum class ColourStyle { EXPRESSIVE, VIBRANT, TONAL_SPOT, NEUTRAL, CMF }
 enum class Palette { VIOLET, LAVENDER, WISTERIA, IRIS, PLUM, LILAC, ORCHID, MAUVE, PERIWINKLE, MINT, BLUE, ROSE, SAGE, CAFE, SLATE }
 
 data class UiPreferences(
@@ -12,25 +13,31 @@ data class UiPreferences(
     val palette: Palette = Palette.VIOLET,
     val glass: Boolean = true,
     val reduceMotion: Boolean = false,
-    val dynamicColour: Boolean = true,
-    val customColour: String = ""
+    val dynamicColour: Boolean = false,
+    val customColour: String = "",
+    val colourStyle: ColourStyle = ColourStyle.EXPRESSIVE
 ) {
     fun encode(): String = buildJsonObject {
-        put("style", style.name); put("appearance", appearance.name)
+        put("style", UiStyle.MIUIX.name); put("appearance", appearance.name)
         put("palette", palette.name); put("glass", glass); put("reduceMotion", reduceMotion)
         put("dynamicColour", dynamicColour); put("customColour", canonicalCustomColour(customColour))
+        put("colourStyle", colourStyle.name)
     }.toString()
     companion object {
         fun decode(value: String?): UiPreferences = runCatching {
             val json = Json.parseToJsonElement(value ?: "{}").jsonObject
             UiPreferences(
-                enumValues<UiStyle>().firstOrNull { it.name == json["style"]?.jsonPrimitive?.content } ?: UiStyle.MIUIX,
+                // Earlier MATERIAL3 preferences are read compatibly, then saved as MIUIX.
+                UiStyle.MIUIX,
                 enumValues<Appearance>().firstOrNull { it.name == json["appearance"]?.jsonPrimitive?.content } ?: Appearance.SYSTEM,
                 enumValues<Palette>().firstOrNull { it.name == json["palette"]?.jsonPrimitive?.content } ?: Palette.VIOLET,
                 json["glass"]?.jsonPrimitive?.booleanOrNull ?: true,
                 json["reduceMotion"]?.jsonPrimitive?.booleanOrNull ?: false,
-                json["dynamicColour"]?.jsonPrimitive?.booleanOrNull ?: true,
-                canonicalCustomColour(json["customColour"]?.jsonPrimitive?.contentOrNull.orEmpty())
+                // Preserve the wallpaper default for saved legacy preferences.
+                json["dynamicColour"]?.jsonPrimitive?.booleanOrNull ?: json.isNotEmpty(),
+                canonicalCustomColour(json["customColour"]?.jsonPrimitive?.contentOrNull.orEmpty()),
+                enumValues<ColourStyle>().firstOrNull { it.name == json["colourStyle"]?.jsonPrimitive?.contentOrNull }
+                    ?: ColourStyle.EXPRESSIVE
             )
         }.getOrDefault(UiPreferences())
     }

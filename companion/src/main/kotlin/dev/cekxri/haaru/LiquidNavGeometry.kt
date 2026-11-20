@@ -22,14 +22,17 @@ internal fun liquidPhysicalPosition(position: Float, count: Int, rtl: Boolean): 
 internal fun liquidCanCommit(y: Float, height: Float, tolerance: Float): Boolean =
     y >= -tolerance && y <= height + tolerance
 
-internal data class LiquidPose(val scaleX: Float, val scaleY: Float, val lift: Float, val lightAngle: Float)
+internal fun liquidDragDestination(position: Float, current: Int, count: Int, cancelled: Boolean,
+                                   y: Float, height: Float, tolerance: Float): Int =
+    if (cancelled || !liquidCanCommit(y, height, tolerance)) current.coerceIn(0, (count - 1).coerceAtLeast(0))
+    else liquidReleaseIndex(position, count)
 
-internal fun liquidPose(position: Float, target: Float, pressure: Float, reduced: Boolean): LiquidPose {
-    if (reduced) return LiquidPose(1f, 1f, 0f, 40f)
-    val lag = (target - position).coerceIn(-1f, 1f)
-    val press = pressure.coerceIn(0f, 1f)
-    val stretch = .11f * abs(lag)
-    return LiquidPose(1f + stretch + .028f * press,
-        1f - stretch * .42f + .085f * press, -2.1f * press,
-        40f + 25f * lag + 7f * (position - 1f).coerceIn(-1f, 1f))
+internal data class LiquidScale(val x: Float, val y: Float)
+
+/** Reference velocity deformation stays bounded even after a fast fling. */
+internal fun liquidLensScale(baseX: Float, baseY: Float, velocity: Float, reduced: Boolean): LiquidScale {
+    if (reduced) return LiquidScale(1f, 1f)
+    val speed = if (velocity.isFinite()) velocity / 10f else 0f
+    return LiquidScale(baseX / (1f - (speed * .75f).coerceIn(-.2f, .2f)),
+        baseY * (1f - (speed * .25f).coerceIn(-.2f, .2f)))
 }

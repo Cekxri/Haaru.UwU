@@ -314,6 +314,7 @@ public final class Controller {
             if ("style".equals(key)) valid = Arrays.asList("MIUIX", "MATERIAL3").contains(value);
             else if ("appearance".equals(key)) valid = Arrays.asList("SYSTEM", "LIGHT", "DARK").contains(value);
             else if ("palette".equals(key)) valid = Arrays.asList("VIOLET", "LAVENDER", "WISTERIA", "IRIS", "PLUM", "LILAC", "ORCHID", "MAUVE", "PERIWINKLE", "MINT", "BLUE", "ROSE", "SAGE", "CAFE", "SLATE").contains(value);
+            else if ("colourStyle".equals(key)) valid = Arrays.asList("EXPRESSIVE", "VIBRANT", "TONAL_SPOT", "NEUTRAL", "CMF").contains(value);
             else if ("glass".equals(key) || "reduceMotion".equals(key) || "dynamicColour".equals(key)) valid = value instanceof Boolean;
             else if ("customColour".equals(key)) valid = value instanceof String && ((String) value).matches("|#[0-9A-Fa-f]{6}");
             else valid = false;

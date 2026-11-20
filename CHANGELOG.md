@@ -1,5 +1,48 @@
 # 更新紀錄 / Changes
 
+## 0.8.0 — 未公開候選 / Unpublished candidate
+
+完整替換前端視覺與跨頁體驗，尚未公開。RTX 3060 加速的 60 Hz Android 模擬器已繪製四頁場景。修正版底欄選中文字在深淺主題中通過原生像素對比檢查。手機幀率與電話引擎仍待實機驗證。
+
+- 新增 TextureView／EGL／GLES3 程序化 mesh 與 PBR／FBO 材質管線，四個有機模型在頁面間持續移動與變形，配合彈簧輸入與深度捲動。
+- 模型、光源與 Miuix／Backdrop 共用目前色彩角色，經低彩度表面與小面積強調色分配；隨附 Manrope variable 字型與 OFL，CJK 使用系統 fallback。
+- 跟隨實際 vsync、不設 120 fps 硬上限；品質分級、省電／thermal、減少動畫、背景／offscreen 與 surface 生命週期接入渲染控制。手機 FPS 尚未實測。
+- 保留逐卡草稿、儲存／重套、還原保留與清除刪方案，詳細診斷預設收起。啟用方案的空字段明示保留已存值；完整回原始仍使用 reset。
+- 「SIM 回報國家」不再一律宣稱 original；RAM 操作改為「載入已啟用方案／清空未儲存草稿」，不修改持久方案。
+- 首頁、工具、設定、關於及浮層採新主題與場景，取代 Canvas 咖啡杯與固定紫色關於頁。
+- 在液態玻璃指示塊上方重繪選中的文字和圖示，維持對比。沿用原有的分頁點擊區與無障礙焦點。
+- 首次使用採紫羅蘭 Expressive 並跟隨系統明暗。Google Monet 可在設定開啟，更新會沿用既有偏好。
+
+The rebuilt frontend remains unpublished. The app drew all four scenes on a 60 Hz Android emulator accelerated by an RTX 3060. Pixel samples confirmed selected navigation label contrast in light and dark themes. Handset frame timing and phone engine validation are pending.
+
+- Added a TextureView/EGL/GLES3 procedural-mesh and PBR/FBO pipeline, with four persistent organic models, page morphing, spring input and depth-dependent scrolling.
+- Models, lighting, Miuix and Backdrop share the selected roles through quiet surfaces and small accents. Manrope variable fonts and OFL are bundled, with system CJK fallback.
+- Display vsync drives scheduling without a hard 120 fps cap. Quality, power saving, thermal conditions, reduced motion and background/offscreen/surface lifecycle paths control rendering; handset FPS has not been measured.
+- Preserved per-SIM drafts, save/reapply, restore-with-retention and clear-with-deletion. Diagnostics remain secondary. Empty fields in active profiles preserve saved values; reset returns the profile to original reporting.
+- Renamed the country readout to reported SIM country. Loading an active plan or clearing an unsaved draft is explicitly RAM-only.
+- Replaced the Canvas cup and fixed-violet About design across pages and overlays.
+- Drew the active navigation label and icon above the glass indicator to preserve contrast. Retained the existing tab hit areas and accessibility focus.
+- Fresh installs use Violet with Expressive colours and follow the system’s light or dark appearance. Enable Google Monet in Settings. Updates retain the existing preference.
+
+## 0.7.3 — 未公開歷史候選 / Unpublished historical candidate ☕
+
+以下為尚未公開、視覺方向已由 0.8.0 取代的 0.7.3 變更。本機建置、必要主機回歸與全新原生模擬器畫面已核對；電話引擎修正仍待真機驗證。
+
+These 0.7.3 changes were not published, and their visual direction is superseded by 0.8.0. Local builds, required host regression and fresh native emulator screens have been checked; the engine correction still awaits handset validation.
+
+- 修正 `exemptFd` 回報被直接判為 fatal：保留原 FD 列表，並在 specialisation 後實際驗證同一 socket 和 protocol。
+- 介面改為只用 Miuix，移除控件風格選擇；保留 Google Monet、15 個手動配色與 HSV 選色器。
+- 色彩引擎更新至 MaterialKolor utilities 6.0.0，可選 Expressive／Vibrant／Tonal Spot／Neutral 2025 或 CMF 2026。Monet 種子色與手動色均按所選風格重新生成角色，`colourStyle` 隨外觀設定保存及遷移。
+- 以 Streama 可見底欄互動作參考，按公開 catalogue 來源重做底欄；本版真機效果仍待驗收。
+- 首頁狀態卡源碼改為連續圓角、非對稱文字、快取陶瓷杯繪圖與點陣光影；減少動畫時靜態，窄畫面／大字體採上下排列，頁面與 SIM 切換間距已整合，當前 App 編譯及 1440 × 3200／530 dpi 原生渲染已核對。
+- 設定最底的關於入口改為獨立紫夜漸層頁，加入原創咖啡杯品牌、版本與分組倉庫／更新／作者／鳴謝連結；隨附授權全文可離線閱讀。獨立路由與返回已串接，關於頁隱藏底欄；本機關於入口／返回／鳴謝及 MIT 授權全文閱讀已核對。
+- Preserved the original file-descriptor list and added post-specialisation verification on the same socket and protocol; `exemptFd` results no longer cause an unconditional fatal error.
+- The interface now uses Miuix only, with no control-style selector. Google Monet, 15 manual palettes and the HSV colour picker remain.
+- Updated the colour engine to MaterialKolor utilities 6.0.0, with Expressive, Vibrant, Tonal Spot and Neutral 2025, plus CMF 2026. Wallpaper seeds and manual colours generate roles using the selected style; `colourStyle` is saved and migrated with appearance settings.
+- Rebuilt the dock using observed Streama interactions and attributed public catalogue sources. Device effects for this release still await validation.
+- Added a continuous-corner home-card design with asymmetric text, a cached ceramic-cup illustration and dotted lighting. Reduced motion keeps it still; narrow screens and larger text use vertical placement. App integration and SIM-selector spacing are in place; current compilation and native rendering at 1440 × 3200 and 530 dpi have been checked.
+- Reworked About into a separate violet-gradient page with original cup branding, versions and grouped repository, release, author and credit links. Bundled licence texts can be read offline. Page routing and return navigation are in place, with the dock hidden on About; local screens, return navigation, credits and MIT licence reading have been checked.
+
 ## 0.7.2 — 2026-11-19 ☕
 
 - 修正 APK 標準輸入安裝命令的參數相容性，避免輸入標記被視為未知選項。

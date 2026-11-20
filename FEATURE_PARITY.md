@@ -1,30 +1,35 @@
-# Haaru 功能與驗收（0.7.2）
+# Haaru 功能與驗收（0.8.0 本機候選）
 
-原預設來源固定於 [預設資料來源](https://github.com/a5533348/Nrfr/commit/6c05f224dc802d0df952db93a6d2852a91c9edb0)，保留完整 28 國與 74 電信商 code／displayName。介面改為獨立 Compose Android App，模組仍採中央 phone Binder clone＋兩個非持久 property＋同 boot 原值 shadow。
+0.8.0 尚未公開。RTX 3060 加速的 Android 模擬器已繪製四頁 3D 場景，並核對修正版底欄的深淺主題選中標籤對比。電話引擎與手機效能仍待實機驗證。
+
+預設資料固定於 [來源版本](https://github.com/a5533348/Nrfr/commit/6c05f224dc802d0df952db93a6d2852a91c9edb0)，保留 28 國與 74 電信商。電話引擎仍採中央回應副本、兩個非持久 properties 與同 boot 原值 shadow，前端重構不改 IPC 或 SIM／DB setter 路徑。
 
 | 功能 | 本版行為 | 驗證界線 |
 | --- | --- | --- |
-| SIM 枚舉與身分 | 活躍 subId／slot／身分匹配，歧義或缺卡隔離 | Controller／AIDL 回歸；OEM 動態雙卡另驗 |
-| 原始 SIM 國家 | 靜態 subscription／phone getter；必要時實際 Context；同 boot shadow 優先 | Context NPE 回歸與 adapter；空原值不猜測 |
-| 原始電信商名稱 | 獨立 originalCarrierName，由活躍 SubscriptionInfo 讀取 | 雙卡、CharSequence、fallback、權限回歸 |
-| 28 國／74 ISP | 原生 App 與原始資料逐項一致 | preset parity |
-| 搜尋／自訂／單欄修改 | 逐卡草稿，保存才寫計畫；ISP 不暗改國家 | Controller 回歸；App 真機互動另驗 |
-| 還原／移除 | 還原停止覆寫保留值；移除／清除才刪設定 | Controller；實際回復須當前 ACK |
-| 全域作用 | 中央回應副本及 gsm.sim.operator.iso-country／alpha | native／Rust 契約；真機 caller 另驗 |
-| phone／root 原值 | 原 property shadow、原 Binder 控制讀、自然更新日誌 | 主機回歸；DB/eSIM/OEM 路徑另驗 |
-| 套用狀態 | 模組檔案 verified 與當前 boot/hash/新鮮 applied ACK 分開 | Controller／Rust status 契約 |
-| 介面 | 原生 Miuix／Material 3／Backdrop、系統字型 | APK 編譯／來源與簽章；流暢度另验 |
-| App／模組 IPC | App無su；模組驗證 peer UID／package／APK signer，只提供固定設定操作 | App／服務契約；無superuser授權真機流程另驗 |
-| KSU 執行按鈕 | 開啟原生 App；缺少時重試安裝 ZIP 內同版 APK | launcher／安裝器契約；KSU 真機另验 |
-| ZIP 覆蓋更新 | 保留安裝當下 SIM／外觀快照與停用狀態 | Rust／Java 相容／安裝生命週期回歸 |
-| APK 更新 | 同 package＋同簽章覆蓋安裝 | 真實 aapt2／apksigner；設備更新另验 |
-| IPC 身份 pin | companion.prop 從已驗證 APK 生成公開 package／certificateSha256／protocol=1，無versionCode鎖 | 發佈／source／APK交叉核對 |
-| 完整撤除 | KSU 解除安裝＋完整手機重啟 | KSU 固定源碼／主機 invariant；metadata 前後另验 |
+| SIM 枚舉與身分 | 活躍 subId／slot／身分匹配；歧義或缺卡隔離 | 原 Controller／AIDL 合約保留；OEM 動態雙卡另驗 |
+| SIM 回報國家 | 同 boot original shadow 優先，否則靜態／Context getter；不一律稱原始 | 來源路徑已核對；真機回報與快取另驗 |
+| 原始電信商名稱 | originalCarrierName 與 CarrierConfig 名稱分開 | 原 adapter 合約保留；真機回報另驗 |
+| 預設與自訂 | 28 國／74 ISP、搜尋、篩選、自訂兩位 ISO 與名稱 | 最新 preset／輸入回歸及交互待核對 |
+| 逐卡草稿 | slot 隔離、切頁保留，儲存才送計畫 | State 合約保留；新頁面交互待核對 |
+| 空字段 | 同 SIM 已啟用 profile 保留已存值，UI 明示 | Controller merge 路徑已核對；不可當作單字段還原 |
+| RAM 載入／清空 | 載入已啟用方案或清空未儲存草稿 | 只用 state.edit；不 reset／forget 或刪持久方案 |
+| 還原／清除 | reset／disable 保留方案；forget／clear 刪 SIM 方案，外觀保留 | 恢復須當前 applied ACK；最新回歸及真機另驗 |
+| 儲存門檻 | fresh、非 readOnly／upgrade／busy、SIM ready、合法非空草稿；不要求 engine initialized | State／後端護欄保留；verified 與 applied 分開 |
+| 全域確認 | 同 boot/hash、新鮮回報、完整 coverage 與 requested fields 支援 | Controller／Rust 合約保留；真機 caller 另驗 |
+| 介面與導航 | 原生 Miuix、窄版 Backdrop 三頁底欄、寬版側欄、48 dp 操作區、Manrope／系統 CJK | 修正版已測窄版深淺主題、選中文字對比及關於頁返回。其他版型與 IME 以原生報告為準 |
+| 有機 3D 場景 | GLES 3 TextureView、程序化網格與 PBR 材質，四模型持續形變、回彈與視差捲動 | NVIDIA GLES 3.1 模擬器繪製四頁，日誌確認高品質、景深及局部自發光 |
+| 色彩與字型 | 首次使用採紫羅蘭 Expressive 並跟隨系統明暗。MaterialKolor 6.0.0 提供可開啟的 Monet、15 個手動預設、HSV 與五種風格。沿用舊有 Monet 偏好，隨附 Manrope OFL | 角色對比通過主機測試。修正版原生預覽核對手動薄荷、Vibrant 與明暗切換 |
+| 刷新率與品質 | 跟隨 vsync、不設 120 fps 上限，依負荷調整緩衝區、網格與取樣 | 60 Hz 模擬器暖機提交約 57.5–60 Hz。手機畫面幀率、溫度與耗電仍待量測 |
+| 減少動畫／生命週期 | 靜態更新、背景與舞台離開畫面時暫停，surface 結束時釋放 | 先前的 0.8.0 GPU 預覽已測背景暫停及恢復。其他情境以對應指紋的原生報告為準 |
+| 關於／鳴謝 | 當前主題與 3D 場景、版本／作者／倉庫／來源、離線授權全文 | 修正版預覽已核對關於頁返回。先前的 0.8.0 預覽核對 Manrope OFL 全文與鳴謝返回 |
+| App／模組 IPC | 無 App su；peer UID／package／signer 檢查及固定操作 | 原服務合約保留；真機流程另驗 |
+| KSU／同版 APK | 執行按鈕開 App／重試 ZIP 同版安裝，離線可用 | 同版 APK 封裝以當前 release verification 核對。模組的真機安裝生命週期另驗 |
+| 覆蓋更新／撤除 | 保留安裝時 SIM／外觀與停用狀態；KSU解除安裝＋完整重啟 | 最新 Rust／Java／生命週期回歸與 metadata 真機前後另驗 |
 
-API 29 是底線，中央引擎依實際 phone classloader／出口探測；不宣稱所有 ROM 均相容。必要 hook、可信 SIM 映射或原值不完整時拒絕套用。UTF-8 property 結果最多 91 bytes，超限不截斷；兩鍵寫入／回讀確認後才標 applied。
+API29 是安裝底線，實際 phone classloader／出口、ART／LSPlant 與 Zygisk provider 必須可用；不保證所有 ROM。必要 hook、可信 SIM 映射或原值不完整時拒絕套用。UTF-8 property 結果最多 91 bytes，超限不截斷；回讀成功才標 applied。
 
-本版修復舊 Context-less TelephonyManager 路徑，並分開保留真正 native 初始化錯誤與 ACK validationError；這些修復不能單独證明全域作用已成功。空 SIM country 可能是設備真實讀值，不能以 ready:true 或非空電信商推定國家。
+空 SIM country 可能是系統真正的空回報，不能用 ready:true 或非空電信商猜國家。已儲存計畫、module-files verified 與電話引擎確認是不同結果。App 模擬器畫面也不能證明全域 caller 一致、DB／eSIM 無污染、provider 故障恢復或解除安裝後完整恢復。
 
-正式發佈的 APK／DEX／簽章／來源／四 ABI 驗證在 `dist/release-verification.json`；真機結果在 `dist/device-report.json`，需匹配當前 fingerprints。App 開啟、全域 caller 一致、DB/eSIM 不污染、雙卡更新、phone/provider 失效與卸載＋重啟撤除分開驗收。沒有成功證據的項目保留待驗。
+APK、DEX、簽章、來源與四 ABI 應查與交付檔案相符的 `dist/release-verification.json`。目前真機狀態為 `deviceTested=false`。日後的真機報告需附上當時的模組、APK、native 與 App 來源指紋，以及實際通過的項目。
 
-這些 SIM 顯示／查詢值不改 IP、GPS、APN、MCC/MNC、實體 SIM 或帳號，亦不保證 TikTok 服務端地區。完整原理與可逆性見 [README.md](README.md) 和 [平台相容性與副本原理](COMPATIBILITY.md)。
+這些回報值不改 IP、GPS、APN、MCC/MNC、實體 SIM 或帳號，亦不保證 TikTok 的服務端地區。電話服務注入仍有崩潰、訊號／通話異常或開機迴圈風險；不能把主機通過當成真機安全保證。完整原理見 [README](README.md) 與 [平台相容性](COMPATIBILITY.md)。

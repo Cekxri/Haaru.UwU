@@ -122,6 +122,34 @@ fn native_monet_and_all_manual_palettes_migrate_without_changing_older_defaults(
 }
 
 #[test]
+fn material_colour_styles_preserve_seed_bytes_and_invalid_styles_leave_the_stage_untouched() {
+    let fixture = Fixture::new(); fs::create_dir(fixture.source.join("data")).unwrap();
+    for colour_style in ["EXPRESSIVE", "VIBRANT", "TONAL_SPOT", "NEUTRAL", "CMF"] {
+        let bytes = format!("{{\"style\":\"MATERIAL3\",\"palette\":\"VIOLET\",\"colourStyle\":\"{colour_style}\",\"dynamicColour\":true,\"customColour\":\"#a1b2c3\"}}").into_bytes();
+        fs::write(fixture.source.join("data/appearance.json"), &bytes).unwrap();
+        migrate(&fixture.source, &fixture.destination).unwrap();
+        assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), bytes);
+        assert_eq!(fs::read(fixture.source.join("data/appearance.json")).unwrap(), bytes);
+        assert!(!fixture.destination.join("data/state.properties").exists(), "Colour-only migration must not invent SIM settings");
+    }
+    let staged = fs::read(fixture.destination.join("data/appearance.json")).unwrap();
+    for bytes in [br#"{"colourStyle":null}"#.as_slice(), br#"{"colourStyle":1}"#.as_slice(), br#"{"colourStyle":true}"#.as_slice(),
+            br#"{"colourStyle":["EXPRESSIVE"]}"#.as_slice(), br#"{"colourStyle":"expressive"}"#.as_slice(),
+            br#"{"colourStyle":"FIDELITY"}"#.as_slice(), br#"{"colourStyle":"EXPRESSIVE;$(id)"}"#.as_slice(),
+            br#"{"colourStyle":"EXPRESSIVE","colourStyle":"NEUTRAL"}"#.as_slice()] {
+        fs::write(fixture.source.join("data/appearance.json"), bytes).unwrap();
+        assert!(migrate(&fixture.source, &fixture.destination).is_err());
+        assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), staged);
+        assert!(!fixture.destination.join("data/state.properties").exists());
+    }
+    let legacy = br#"{"palette":"VIOLET","glass":true}"#;
+    fs::write(fixture.source.join("data/appearance.json"), legacy).unwrap();
+    migrate(&fixture.source, &fixture.destination).unwrap();
+    assert_eq!(fs::read(fixture.destination.join("data/appearance.json")).unwrap(), legacy,
+        "Older preferences must not have a new colour-style default inserted during migration");
+}
+
+#[test]
 fn preserves_settings_and_excludes_all_transient_boot_data() {
     let fixture = Fixture::new(); let mut original = sample();
     for key in ["targetPackages", "baseline.0.country", "pending.0.country", "last.0.country", "unrecognized"] { original.insert(key.into(), "obsolete".into()); }

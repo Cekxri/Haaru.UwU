@@ -171,8 +171,25 @@ public final class UpgradeTest {
             check(Arrays.equals(modern, Files.readAllBytes(dest.resolve("data/appearance.json"))), "Native palette and Monet fields are preserved: " + palette);
         }
     }
+    private static void expressiveColourStyleMigration() throws Exception {
+        Path root = Files.createTempDirectory("haaru-colour-style-migration-"); Path source = module(root, "live"), dest = module(root, "stage");
+        for (String colourStyle : Arrays.asList("EXPRESSIVE", "VIBRANT", "TONAL_SPOT", "NEUTRAL", "CMF")) {
+            byte[] styled = ("{\"style\":\"MATERIAL3\",\"palette\":\"VIOLET\",\"colourStyle\":\"" + colourStyle + "\",\"dynamicColour\":true,\"customColour\":\"#aabbcc\"}").getBytes(StandardCharsets.UTF_8);
+            appearance(source, styled); Upgrade.migrate(source, dest);
+            check(Arrays.equals(styled, Files.readAllBytes(dest.resolve("data/appearance.json"))), "Colour style migrates with the original seed and legacy UI choice");
+            check(Arrays.equals(styled, Files.readAllBytes(source.resolve("data/appearance.json"))) && !Files.exists(dest.resolve("data/state.properties")), "Colour-only migration does not change source preferences or invent SIM settings");
+        }
+        byte[] staged = Files.readAllBytes(dest.resolve("data/appearance.json"));
+        for (String invalid : Arrays.asList("{\"colourStyle\":0}", "{\"colourStyle\":null}", "{\"colourStyle\":\"FIDELITY\"}", "{\"colourStyle\":\"EXPRESSIVE\",\"colourStyle\":\"NEUTRAL\"}")) {
+            appearance(source, invalid.getBytes(StandardCharsets.UTF_8)); rejects(source, dest);
+            check(Arrays.equals(staged, Files.readAllBytes(dest.resolve("data/appearance.json"))) && !Files.exists(dest.resolve("data/state.properties")), "Invalid colour-style migration leaves the staged appearance untouched");
+        }
+        byte[] legacy = "{\"palette\":\"VIOLET\",\"glass\":true}".getBytes(StandardCharsets.UTF_8);
+        appearance(source, legacy); Upgrade.migrate(source, dest);
+        check(Arrays.equals(legacy, Files.readAllBytes(dest.resolve("data/appearance.json"))), "Older preferences migrate without an inserted colour-style default");
+    }
     public static void main(String[] args) throws Exception {
-        preservationAndRepeatedUpdate(); invalidSourceAndAtomicValidation(); locksLegacyAndAppearanceOnly(); unsafeLinks(); interruptedCommitRollback(); legacyAndNativeAppearancePaths();
+        preservationAndRepeatedUpdate(); invalidSourceAndAtomicValidation(); locksLegacyAndAppearanceOnly(); unsafeLinks(); interruptedCommitRollback(); legacyAndNativeAppearancePaths(); expressiveColourStyleMigration();
         System.out.println("Upgrade migration: " + checks + " preservation and rejection checks passed (no Android device claim)");
     }
 }

@@ -149,6 +149,7 @@ public final class ControllerTest {
         Path legacy = dir.getParent().resolve("webroot/appearance.json"); Files.createDirectories(legacy.getParent());
         byte[] original = "{\"palette\":\"MINT\",\"glass\":true}".getBytes(StandardCharsets.UTF_8); Files.write(legacy, original);
         check(((Map<?, ?>) c.run("prefs").get("appearance")).get("palette").equals("MINT") && !Files.exists(dir), "Legacy appearance read does not create data or contact telephony");
+        check(!((Map<?, ?>) c.run("prefs").get("appearance")).containsKey("colourStyle") && Arrays.equals(original, Files.readAllBytes(legacy)), "Reading older preferences does not insert a colour-style default or rewrite the source");
         String monet = "{\"dynamicColour\":false,\"customColour\":\"#a1b2c3\",\"palette\":\"ORCHID\",\"glass\":false}";
         check(Boolean.TRUE.equals(c.run("saveprefs", hex(monet)).get("verified")), "Native appearance save migrates the old file");
         Map<?, ?> appearance = (Map<?, ?>) c.run("prefs").get("appearance");
@@ -157,6 +158,12 @@ public final class ControllerTest {
         byte[] runtime = "runtime bytes must remain unchanged".getBytes(StandardCharsets.UTF_8); Files.write(dir.resolve("runtime.json"), runtime);
         for (String palette : new String[] {"VIOLET", "LAVENDER", "WISTERIA", "IRIS", "PLUM", "LILAC", "ORCHID", "MAUVE", "PERIWINKLE", "MINT", "BLUE", "ROSE", "SAGE", "CAFE", "SLATE"})
             check(Boolean.TRUE.equals(c.run("saveprefs", hex("{\"palette\":\"" + palette + "\",\"dynamicColour\":true,\"customColour\":\"\"}")).get("verified")), "Manual palette remains valid: " + palette);
+        for (String colourStyle : new String[] {"EXPRESSIVE", "VIBRANT", "TONAL_SPOT", "NEUTRAL", "CMF"}) {
+            String styled = "{\"style\":\"MIUIX\",\"palette\":\"VIOLET\",\"colourStyle\":\"" + colourStyle + "\",\"dynamicColour\":false,\"customColour\":\"#a1b2c3\"}";
+            check(Boolean.TRUE.equals(c.run("saveprefs", hex(styled)).get("verified")), "Colour style can be saved without phone services: " + colourStyle);
+            Map<?, ?> styledRead = (Map<?, ?>) c.run("prefs").get("appearance");
+            check(colourStyle.equals(styledRead.get("colourStyle")) && "#A1B2C3".equals(styledRead.get("customColour")) && "VIOLET".equals(styledRead.get("palette")), "Colour style and seed choices survive canonical readback together");
+        }
         check(Arrays.equals(runtime, Files.readAllBytes(dir.resolve("runtime.json"))) && !Files.exists(dir.resolve("state.properties")) && f.calls == 0, "Appearance writes never replace the runtime or SIM settings");
         byte[] current = Files.readAllBytes(dir.resolve("appearance.json")); Files.write(legacy, current);
         check(c.run("prefs").get("appearance") != null, "Identical duplicate appearance files are unambiguous");
@@ -165,6 +172,11 @@ public final class ControllerTest {
         check(Arrays.equals(current, Files.readAllBytes(dir.resolve("appearance.json"))) && Files.exists(legacy), "Conflicting duplicates are rejected before either file changes");
         Files.delete(legacy);
         for (String invalid : new String[] {"{\"dynamicColour\":1}", "{\"customColour\":\"red\"}", "{\"customColour\":\"#12345\"}", "{\"customColour\":\"#12345z\"}", "{\"palette\":\"OTHER\"}"}) rejects(c, "saveprefs", hex(invalid));
+        for (String invalid : new String[] {"{\"colourStyle\":null}", "{\"colourStyle\":true}", "{\"colourStyle\":1}", "{\"colourStyle\":[\"EXPRESSIVE\"]}", "{\"colourStyle\":\"expressive\"}", "{\"colourStyle\":\"FIDELITY\"}", "{\"colourStyle\":\"EXPRESSIVE;$(id)\"}", "{\"colourStyle\":\"EXPRESSIVE\",\"colourStyle\":\"NEUTRAL\"}"}) {
+            rejects(c, "saveprefs", hex(invalid));
+            check(Arrays.equals(current, Files.readAllBytes(dir.resolve("appearance.json"))), "Invalid colour styles cannot replace the last saved appearance");
+        }
+        check(Arrays.equals(runtime, Files.readAllBytes(dir.resolve("runtime.json"))) && f.calls == 0, "Rejected colour-style input never reaches telephony or runtime publication");
     }
     private static void pathsLocksAndMigration() throws Exception {
         Fake f = new Fake(); Path dir = directory(); Path module = dir.getParent(); Controller c = controller(dir, f, "boot1");

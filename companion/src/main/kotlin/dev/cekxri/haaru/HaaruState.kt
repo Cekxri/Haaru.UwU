@@ -117,7 +117,7 @@ internal class HaaruState(private val bridge: UiBridge, private val scope: Corou
 }
 
 internal fun friendlyError(raw: String): String = when {
-    raw.contains("安裝") || raw.contains("not installed", true) -> "請先安裝 Haaru 模組並重新啟動手機。"
+    raw.contains("安裝") || raw.contains("not installed", true) -> "請先安裝 Haaru 模組，再重新讀取。"
     raw.contains("sdk", true) || raw.contains("ACK", true) || raw.contains("engine", true) -> friendlyEngineError(raw)
     raw.contains("服務") || raw.contains("connect", true) || raw.contains("Root", true) || raw.contains("permission", true) || raw.contains("denied", true) -> "模組服務尚未連接，請稍後重新讀取。"
     raw.contains("逾時") || raw.contains("timeout", true) -> "模組回應有點久，請重新讀取。"
@@ -129,8 +129,8 @@ internal fun friendlyError(raw: String): String = when {
 
 /** A working app-to-module connection does not imply a working phone-process hook. */
 internal fun friendlyEngineError(raw: String): String = when {
-    raw.contains("disconnect", true) -> "電話引擎已斷線，請更新模組並重新啟動手機。"
-    raw.contains("sdk", true) -> "電話引擎尚未初始化，請更新模組並重新啟動手機。"
-    raw.contains("ACK", true) -> "尚未收到電話引擎確認，請重新讀取。"
-    else -> "電話引擎暫時未就緒，請重新啟動手機後再試。"
+    raw.contains("disconnect", true) -> "電話引擎尚未連上，請到工具頁查看原因。"
+    raw.contains("sdk", true) -> "電話引擎未完成初始化，請到工具頁查看原因。"
+    raw.contains("ACK", true) -> "正在等待電話引擎回報，可到工具頁查看狀態。"
+    else -> "電話引擎回報錯誤，請到工具頁查看原因。"
 }

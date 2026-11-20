@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #include "../src/global_properties.hpp"
 #include "../src/engine_diagnostics.hpp"
+#include "../src/companion_connection.hpp"
 #include <iostream>
 #include <stdexcept>
 
@@ -18,6 +19,60 @@ void rejects(Function run, const char* message) {
 }
 }
 int main() {
+    using haaru::CompanionSocketIdentity;
+    const CompanionSocketIdentity ownedSocket{7, 101, 1, true};
+    int identityReads = 0, probes = 0;
+    auto verifySocket = [&](CompanionSocketIdentity actual, bool reply) {
+        return haaru::validateCompanionConnection(ownedSocket,
+            [&] { ++identityReads; return actual; }, [&] { ++probes; return reply; });
+    };
+    check(verifySocket(ownedSocket, true) && identityReads == 1 && probes == 1,
+        "the same live socket requires an actual successful protocol round trip");
+    probes = 0;
+    check(!verifySocket({}, true) && probes == 0, "a closed descriptor is rejected without sending or reading");
+    check(!verifySocket({7, 102, 1, true}, true) && probes == 0,
+        "a reused descriptor for another socket is rejected before protocol IO");
+    check(!verifySocket({8, 101, 1, true}, true) && probes == 0,
+        "the same inode number on another device does not identify the owned socket");
+    check(!verifySocket({7, 101, 2, true}, true) && probes == 0,
+        "a replaced socket type cannot pass the captured identity gate");
+    check(!verifySocket({7, 101, 1, false}, true) && probes == 0,
+        "a reused non-socket never reaches protocol IO even with matching numeric metadata");
+    check(!verifySocket(ownedSocket, false) && probes == 1,
+        "an intact socket with a closed peer or invalid protocol reply cannot claim connection readiness");
+    int closes = 0;
+    haaru::closeOwnedCompanion(ownedSocket, [&] { return CompanionSocketIdentity{}; }, [&] { ++closes; });
+    haaru::closeOwnedCompanion(ownedSocket, [&] { return CompanionSocketIdentity{7, 102, 1, true}; }, [&] { ++closes; });
+    check(closes == 0, "bootstrap and engine cleanup must not close a lost or reused descriptor");
+    haaru::closeOwnedCompanion(ownedSocket, [&] { return ownedSocket; }, [&] { ++closes; });
+    check(closes == 1, "cleanup closes the confirmed owned socket exactly once");
+    auto priorFds = std::vector<int>{3, 6, 9};
+    auto retainedFds = haaru::companionFdList(priorFds, 12);
+    check(retainedFds == std::vector<int>({3, 6, 9, 12}) && priorFds == std::vector<int>({3, 6, 9}),
+        "fallback retains all caller-owned descriptors and appends only the owned companion without mutating the input");
+    check(haaru::companionFdList({3, 12, 9, 12}, 12) == std::vector<int>({3, 12, 9, 12}),
+        "an already-retained socket is not duplicated and existing entries remain byte-for-byte ordered");
+    check(haaru::companionFdList({}, 12) == std::vector<int>({12}), "an exposed null zygote array can retain exactly the companion socket");
+    rejects<std::invalid_argument>([] { haaru::companionFdList({3}, -1); }, "invalid owned descriptor cannot enter the zygote list");
+    rejects<std::invalid_argument>([] { haaru::companionFdList(std::vector<int>(4097, 3), 12); }, "oversized zygote list fails before replacement allocation");
+    // Model provider sanitisation separately from its API result. The API may
+    // return false even when the optional list retained the socket, or when a
+    // specialise-only path performs no FD sanitation. Readiness always uses
+    // the observed post identity and a round trip, never the provider bool.
+    for (bool apiReported : {false, true}) {
+        for (bool listAvailable : {false, true}) {
+            auto fds = listAvailable ? haaru::companionFdList({3, 9}, 12) : std::vector<int>{3, 9};
+            bool retainedByList = std::find(fds.begin(), fds.end(), 12) != fds.end();
+            auto observed = retainedByList ? ownedSocket : CompanionSocketIdentity{};
+            probes = 0;
+            check(verifySocket(observed, true) == listAvailable && probes == (listAvailable ? 1 : 0),
+                "both true and false exemption reports must pass the actual post-sanitisation socket gate");
+            (void)apiReported;
+        }
+    }
+    probes = 0;
+    check(verifySocket(ownedSocket, true) && probes == 1,
+        "false exemption with no optional list is accepted only when a specialise-only path kept the same socket and replied");
     using haaru::PropertyProfile;
     using haaru::overlayProperty;
     using haaru::splitProperty;

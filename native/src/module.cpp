@@ -8,8 +8,10 @@
 #include "policy.hpp"
 #include "global_properties.hpp"
 #include "engine_diagnostics.hpp"
+#include "companion_connection.hpp"
 #include <android/api-level.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/system_properties.h>
 #include <fcntl.h>
@@ -48,6 +50,8 @@ jmethodID requiredId = nullptr, coverageId = nullptr, countrySupportId = nullptr
 jobject phoneContext = nullptr, dexLoader = nullptr;
 std::vector<uint8_t> dex;
 std::atomic<int> channel{-1};
+haaru::CompanionSocketIdentity channelIdentity;
+std::atomic<bool> fdExemptionReported{false}, fdIgnoreListAvailable{false}, connectionValidated{false};
 haaru::ArtSymbols art;
 std::atomic<bool> guardsReady{false}, engineReady{false}, baselineReady{false}, started{false};
 std::atomic<bool> recoveryRequired{false};
@@ -92,11 +96,34 @@ Json acknowledgement(bool ok, bool initialized, bool applied, std::string_view h
     if (failure.empty()) failure = std::string(error);
     if (sdk <= 0 && failure.empty()) failure = "Cannot determine Android SDK: NDK API=" +
         std::to_string(android_get_device_api_level()) + ", ro.build.version.sdk=" + haaru::boundedDiagnostic(readProperty("ro.build.version.sdk"), 48);
-    return haaru::engineAck(ok && !failed, initialized && !failed, applied && !failed, hookCount.load(), sdk, bootId(), hash, timestampMs(), getpid(), stage, failure,
+    auto ack = haaru::engineAck(ok && !failed, initialized && !failed, applied && !failed, hookCount.load(), sdk, bootId(), hash, timestampMs(), getpid(), stage, failure,
         requiredHookCount.load(), coverageReady && !failed, countrySupported.load(), nameSupported.load());
+    ack["fdExemptionReported"] = fdExemptionReported.load();
+    ack["fdIgnoreListAvailable"] = fdIgnoreListAvailable.load();
+    ack["connected"] = channel >= 0 && connectionValidated.load();
+    return ack;
 }
 
 struct OwnFd { int value; ~OwnFd() { if (value >= 0) close(value); } };
+haaru::CompanionSocketIdentity socketIdentity(int fd) {
+    struct stat info{};
+    int result;
+    do { result = fstat(fd, &info); } while (result < 0 && errno == EINTR);
+    if (result < 0 || !S_ISSOCK(info.st_mode)) return {};
+    int type = 0; socklen_t size = sizeof(type);
+    do { result = getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &size); } while (result < 0 && errno == EINTR);
+    if (result < 0 || type != SOCK_STREAM) return {};
+    sockaddr_un peer{}; size = sizeof(peer);
+    do { result = getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &size); } while (result < 0 && errno == EINTR);
+    if (result < 0 || peer.sun_family != AF_UNIX) return {};
+    return {static_cast<uint64_t>(info.st_dev), static_cast<uint64_t>(info.st_ino), type, true};
+}
+void closeChannel() {
+    int fd = channel.exchange(-1);
+    if (fd < 0) return;
+    if (!channelIdentity.valid) { close(fd); return; } // Before retention, still in pre-specialisation.
+    haaru::closeOwnedCompanion(channelIdentity, [fd] { return socketIdentity(fd); }, [fd] { close(fd); });
+}
 struct Internal { Internal() { ++internalDepth; } ~Internal() { --internalDepth; } };
 struct LocalFrame {
     JNIEnv* env;
@@ -264,10 +291,16 @@ void companion(int fd) {
 bool exchange(const Json& shadow, const Json& ack, Json& response, const char* phase = "snapshot") {
     std::lock_guard lock(channelMutex);
     if (channel < 0) return false;
+    // Checkpoints also run on bootstrap failures, including failures before the
+    // normal post-specialisation validation. Do not use a recycled FD there.
+    if (channelIdentity.valid && !channelIdentity.matches(socketIdentity(channel))) {
+        channel = -1;
+        return false;
+    }
     try {
         if (sendJson(channel, Json{{"shadow", shadow}, {"ack", ack}, {"phase", phase}}) && readJson(channel, response)) return true;
     } catch (...) {}
-    close(channel); channel = -1;
+    closeChannel();
     return false;
 }
 // Consume the reply so a diagnostic checkpoint cannot desynchronise runtime requests.
@@ -336,6 +369,58 @@ void requireJni(JNIEnv* env, bool accepted, std::string_view reason) {
         auto javaError = takeJavaFailure(env);
         throw std::runtime_error(std::string(reason) + (javaError.empty() ? "" : ": " + javaError));
     }
+}
+void retainCompanionFd(JNIEnv* env, zygisk::Api* api, zygisk::AppSpecializeArgs* args) {
+    int fd = channel.load();
+    channelIdentity = socketIdentity(fd);
+    if (!channelIdentity.valid) throw std::runtime_error("Companion did not provide a connected Unix stream socket");
+    // Some API-compatible providers cannot report this result reliably. Request
+    // exemption, preserve the exposed zygote list, then verify the real socket
+    // after specialisation instead of accepting or failing on this bool alone.
+    fdExemptionReported = api->exemptFd(fd);
+    fdIgnoreListAvailable = args->fds_to_ignore != nullptr;
+    if (!args->fds_to_ignore) return;
+    auto prior = *args->fds_to_ignore;
+    jsize count = prior ? env->GetArrayLength(prior) : 0;
+    requireJni(env, count >= 0 && count <= 4096, "Invalid zygote FD retention list");
+    std::vector<int> values(static_cast<size_t>(count));
+    if (count) env->GetIntArrayRegion(prior, 0, count, values.data());
+    requireJni(env, true, "Cannot read the zygote FD retention list");
+    auto retained = haaru::companionFdList(values, fd);
+    if (retained.size() == values.size()) return;
+    auto replacement = env->NewIntArray(static_cast<jsize>(retained.size()));
+    requireJni(env, replacement != nullptr, "Cannot allocate the companion FD retention list");
+    env->SetIntArrayRegion(replacement, 0, static_cast<jsize>(retained.size()), retained.data());
+    if (env->ExceptionCheck()) {
+        env->DeleteLocalRef(replacement);
+        requireJni(env, false, "Cannot write the companion FD retention list");
+    }
+    *args->fds_to_ignore = replacement;
+    // The provider/zygote still owns and uses both JNI arguments until post.
+    // Do not delete the original or replacement local reference here.
+}
+void validateRetainedCompanion() {
+    int fd = channel.load();
+    Json response;
+    bool sameSocket = false;
+    bool connected = haaru::validateCompanionConnection(channelIdentity,
+        [fd, &sameSocket] {
+            auto actual = fd >= 0 ? socketIdentity(fd) : haaru::CompanionSocketIdentity{};
+            sameSocket = channelIdentity.matches(actual);
+            // Zygote may have closed this number and another component reused
+            // it. Discard our number without closing or using that object.
+            if (!sameSocket) channel = -1;
+            return actual;
+        }, [&response] {
+            return exchange(Json{}, acknowledgement(false, false, false), response, "diagnostic") &&
+                response.contains("active") && response["active"].is_boolean() &&
+                response.contains("config") && response["config"].is_object() &&
+                response.contains("hash") && response["hash"].is_string() &&
+                response.contains("recoveryRequired") && response["recoveryRequired"].is_boolean();
+        });
+    if (!connected) throw std::runtime_error(sameSocket ? "Companion protocol round-trip failed after process specialisation" :
+        "Companion socket did not survive process specialisation");
+    connectionValidated = true;
 }
 std::string hookError(JNIEnv* env, std::string_view fallback) {
     if (!hooksType || !healthErrorId) return std::string(fallback);
@@ -602,7 +687,7 @@ void engineLoop() {
         recordFailure("engine-thread", "Cannot attach the central engine thread to the phone JavaVM");
         checkpoint();
         std::lock_guard lock(channelMutex);
-        if (channel >= 0) close(channel); channel = -1;
+        closeChannel();
         return;
     }
     Internal internal;
@@ -661,7 +746,7 @@ void engineLoop() {
         Json response;
         (void)exchange(shadowSnapshot(), acknowledgement(false, false, false, currentHash, error), response, "diagnostic");
     }
-    { std::lock_guard lock(channelMutex); if (channel >= 0) close(channel); channel = -1; }
+    { std::lock_guard lock(channelMutex); closeChannel(); }
     javaVm->DetachCurrentThread();
 }
 void attached(JNIEnv* env, jclass, jobject context) {
@@ -692,13 +777,13 @@ void attached(JNIEnv* env, jclass, jobject context) {
         recordFailure("engine-thread", std::string("Cannot start the central engine thread: ") + failure.what());
         checkpoint();
         std::lock_guard lock(channelMutex);
-        if (channel >= 0) close(channel); channel = -1;
+        closeChannel();
     }
     catch (...) {
         recordFailure("engine-thread", "Cannot start the central engine thread");
         checkpoint();
         std::lock_guard lock(channelMutex);
-        if (channel >= 0) close(channel); channel = -1;
+        closeChannel();
     }
 }
 
@@ -775,20 +860,20 @@ void Module::preAppSpecialize(zygisk::AppSpecializeArgs* args) {
         if (!originalHandle) missing += " native_get(long)";
         if (!originalSet) missing += " native_set(String,String)";
         requireJni(env, guardsReady, "Required SystemProperties JNI guards unavailable:" + missing);
-        if (!api->exemptFd(channel))
-            throw std::runtime_error("Cannot retain global-engine connection");
+        setStage("connection-retention");
+        retainCompanionFd(env, api, args);
         setStage("specialization");
         checkpoint();
     } catch (const std::exception& failure) {
         recordJniFailure(env, failure.what());
         if (protocolReady) checkpoint();
-        if (channel >= 0) close(channel); channel = -1;
+        closeChannel();
         guardsReady = false;
         if (!registered && !selected) api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
     } catch (...) {
         recordJniFailure(env, "Unknown phone pre-specialization failure");
         if (protocolReady) checkpoint();
-        if (channel >= 0) close(channel); channel = -1;
+        closeChannel();
         guardsReady = false;
         if (!registered && !selected) api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
     }
@@ -802,6 +887,8 @@ void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
         if (!restore(env)) throw std::runtime_error("Original property restoration failed");
         if (recoveryRequired) throw std::runtime_error("An interrupted SIM update requires a full phone reboot");
         if (!guardsReady || channel < 0) throw std::runtime_error("Required property guards or companion connection are unavailable");
+        setStage("connection-validation");
+        validateRetainedCompanion();
         setStage("art-symbols");
         checkpoint();
         if (!art.initialize()) throw std::runtime_error(art.error());
@@ -944,7 +1031,7 @@ void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
         try { std::thread(engineLoop).detach(); }
         catch (...) {
             std::lock_guard lock(channelMutex);
-            if (channel >= 0) close(channel); channel = -1;
+            closeChannel();
         }
     }
 }

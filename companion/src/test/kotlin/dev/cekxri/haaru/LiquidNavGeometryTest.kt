@@ -23,11 +23,18 @@ class LiquidNavGeometryTest {
         assertFalse(liquidCanCommit(-25f, 64f, 24f))
         assertFalse(liquidCanCommit(89f, 64f, 24f))
     }
-    @Test fun reducedMotionRemovesStretchAndLiftDuringDrag() {
-        assertEquals(LiquidPose(1f, 1f, 0f, 40f), liquidPose(-.1f, 2f, 1f, true))
-        val moving = liquidPose(0f, 2f, 1f, false)
-        assertTrue(moving.scaleX in 1f..1.15f)
-        assertTrue(moving.scaleY in .95f..1.09f)
-        assertTrue(moving.lift in -2.2f..0f)
+    @Test fun aCancelledOrVerticallyEscapedDragDoesNotCommitItsPreviewTab() {
+        assertEquals(0, liquidDragDestination(2f, 0, 3, true, 30f, 54f, 24f))
+        assertEquals(1, liquidDragDestination(2f, 1, 3, false, 79f, 54f, 24f))
+        assertEquals(2, liquidDragDestination(1.8f, 0, 3, false, 30f, 54f, 24f))
+    }
+    @Test fun reducedMotionDisablesEvenAnInFlightPressedOrVelocityDeformation() {
+        assertEquals(LiquidScale(1f, 1f), liquidLensScale(1.4f, 1.4f, 1000f, true))
+        val right = liquidLensScale(1f, 1f, 1000f, false)
+        val left = liquidLensScale(1f, 1f, -1000f, false)
+        assertEquals(1.25f, right.x, .001f)
+        assertEquals(.8f, right.y, .001f)
+        assertEquals(1f / 1.2f, left.x, .001f)
+        assertEquals(1.2f, left.y, .001f)
     }
 }
