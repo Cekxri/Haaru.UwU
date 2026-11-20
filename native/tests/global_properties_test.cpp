@@ -181,8 +181,8 @@ int main() {
         earlyDisconnect["initialized"] == false, "early EOF records retention evidence without confirming bootstrap");
     pending["fdExemptionReported"] = false;
     auto noRetention = haaru::disconnectedAck(pending, 36, "fixture-boot", 123459, 2870);
-    check(noRetention["error"] == "Phone companion disconnected during specialisation without an FD retention path" &&
-        !noRetention["connected"].get<bool>(), "classify a disconnect when neither retention path was available");
+    check(noRetention["error"] == "Phone companion disconnected before post-specialisation validation" &&
+        !noRetention["connected"].get<bool>(), "unavailable retention flags do not manufacture a disconnect cause");
     pending.erase("fdIgnoreListAvailable");
     auto unknownRetention = haaru::disconnectedAck(pending, 36, "fixture-boot", 123459, 2870);
     check(unknownRetention["error"] == "Phone companion disconnected before post-specialisation validation",

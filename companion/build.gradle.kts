@@ -12,8 +12,8 @@ android {
         applicationId = "dev.cekxri.haaru"
         minSdk = 29
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.8.3"
+        versionCode = 19
+        versionName = "0.8.4"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {

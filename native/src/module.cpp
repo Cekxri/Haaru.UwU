@@ -109,17 +109,27 @@ Json acknowledgement(bool ok, bool initialized, bool applied, std::string_view h
 }
 
 struct OwnFd { int value; ~OwnFd() { if (value >= 0) close(value); } };
-haaru::CompanionSocketIdentity socketIdentity(int fd) {
+haaru::CompanionSocketIdentity socketIdentity(int fd, int* failure = nullptr) {
+    if (failure) *failure = 0;
     struct stat info{};
     int result;
     do { result = fstat(fd, &info); } while (result < 0 && errno == EINTR);
-    if (result < 0 || !S_ISSOCK(info.st_mode)) return {};
+    if (result < 0 || !S_ISSOCK(info.st_mode)) {
+        if (failure) *failure = result < 0 ? errno : ENOTSOCK;
+        return {};
+    }
     int type = 0; socklen_t size = sizeof(type);
     do { result = getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &size); } while (result < 0 && errno == EINTR);
-    if (result < 0 || type != SOCK_STREAM) return {};
+    if (result < 0 || type != SOCK_STREAM) {
+        if (failure) *failure = result < 0 ? errno : EPROTOTYPE;
+        return {};
+    }
     sockaddr_un peer{}; size = sizeof(peer);
     do { result = getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &size); } while (result < 0 && errno == EINTR);
-    if (result < 0 || peer.sun_family != AF_UNIX) return {};
+    if (result < 0 || peer.sun_family != AF_UNIX) {
+        if (failure) *failure = result < 0 ? errno : EAFNOSUPPORT;
+        return {};
+    }
     return {static_cast<uint64_t>(info.st_dev), static_cast<uint64_t>(info.st_ino), type, true};
 }
 void closeChannel() {
@@ -407,9 +417,10 @@ void validateRetainedCompanion() {
     int fd = channel.load();
     Json response;
     bool sameSocket = false;
+    int identityError = 0;
     bool connected = haaru::validateCompanionConnection(channelIdentity,
-        [fd, &sameSocket] {
-            auto actual = fd >= 0 ? socketIdentity(fd) : haaru::CompanionSocketIdentity{};
+        [fd, &sameSocket, &identityError] {
+            auto actual = fd >= 0 ? socketIdentity(fd, &identityError) : haaru::CompanionSocketIdentity{};
             sameSocket = channelIdentity.matches(actual);
             // Zygote may have closed this number and another component reused
             // it. Discard our number without closing or using that object.
@@ -422,8 +433,14 @@ void validateRetainedCompanion() {
                 response.contains("hash") && response["hash"].is_string() &&
                 response.contains("recoveryRequired") && response["recoveryRequired"].is_boolean();
         });
-    if (!connected) throw std::runtime_error(sameSocket ? "Companion protocol round-trip failed after process specialisation" :
-        "Companion socket did not survive process specialisation");
+    if (!connected) {
+        __android_log_print(ANDROID_LOG_WARN, "HaaruEngine", "Companion validation failed (identity errno=%d, same socket=%d)",
+            identityError, sameSocket ? 1 : 0);
+        throw std::runtime_error(identityError == EACCES || identityError == EPERM ?
+            "Companion socket metadata access denied after process specialisation" :
+            sameSocket ? "Companion protocol round-trip failed after process specialisation" :
+            "Companion socket did not survive process specialisation");
+    }
     connectionValidated = true;
 }
 std::string hookError(JNIEnv* env, std::string_view fallback) {

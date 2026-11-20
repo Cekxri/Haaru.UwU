@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# The phone (radio) validates and uses only its inherited Zygisk IPC socket.
+# getattr: fstat/getpeername; getopt: SO_TYPE; setopt: bounded timeouts;
+# read/write: the existing authenticated, framed companion protocol.
+allow radio zygote unix_stream_socket { getattr getopt setopt read write }

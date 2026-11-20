@@ -40,6 +40,12 @@ def main():
         assert properties["name"] == "Haaru" and properties["author"] == "Cekxri"
         assert properties["description"] == "未設定~哦Nya^ ܸ⩌⩊⩌ ܸ^🍞 城堡之下的SIM國度.咖啡廳☕"
         assert manifest["webUi"] is False
+        policy = archive.read("sepolicy.rule").decode("utf-8")
+        rules = [line.strip() for line in policy.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+        assert rules == ["allow radio zygote unix_stream_socket { getattr getopt setopt read write }"], \
+            "Phone IPC policy must contain only the required, scoped socket permissions"
+        report["phoneSocketPolicy"] = {"source": "radio", "target": "zygote", "class": "unix_stream_socket",
+                                      "permissions": ["getattr", "getopt", "setopt", "read", "write"], "permissive": False}
         assert "dev.cekxri.haaru" in archive.read("action.sh").decode()
         assert "haaru-upgrade-$ABI" in archive.read("customize.sh").decode()
         for name in names:

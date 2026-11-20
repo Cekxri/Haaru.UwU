@@ -1,23 +1,26 @@
-# Haaru 0.8.3 發佈準備
+# Haaru 0.8.4 發佈準備
 
-**0.8.3（versionCode 18）為公開預覽版。** 這版改善切頁動態、雕塑轉場與淺色色階，並新增 Zygisk 連線保留診斷。既有幀時序樣本來自 0.8.0。手機效能和 KernelSU 電話引擎仍待實機驗證，`deviceTested=false`。
+**0.8.4（versionCode 19）為公開預覽版。** 本版補上 radio 驗證繼承 Zygisk Unix socket 所需的限定 SELinux 權限；保留全部身分與協議檢查。當版建置、封裝及隱私驗證以隨附 manifests 為準。KernelSU 真機套用／還原仍待覆驗，`deviceTested=false`。
 
 ## 交付檔案
 
 | 檔案 | 用途 |
 | --- | --- |
-| `Haaru-0.8.3.zip` | KSU 模組與同版本已簽 APK；安裝完成後完整重啟 |
-| `Haaru-0.8.3.apk` | 原生 Miuix／GLES3 配套 App，同 package／簽章更新 |
-| `Haaru-0.8.3-source.zip` | 白名單 source，排除私人簽章／診斷／設定 |
+| `Haaru-0.8.4.zip` | KSU 模組與同版本已簽 APK；安裝完成後完整重啟 |
+| `Haaru-0.8.4.apk` | 原生 Miuix／GLES3 配套 App，同 package／簽章更新 |
+| `Haaru-0.8.4-source.zip` | 白名單 source，排除私人簽章／診斷／設定 |
 | `SHA256SUMS.txt` | 最終交付檔案校驗值 |
 | build／companion manifests | 實際來源／工具／版本／產物／簽章指紋 |
 | release-verification／device-report | 分開記錄發佈驗證與當前真機 scope |
 
 ZIP 的同版 App 自動安裝與 Android 未就緒時開機續裝保留；KSU 執行按鈕開啟 App 或重試安裝 ZIP 內 APK，不向 latest 取錯版本。App 無需單獨 superuser 授權，模組 IPC 以真實 peer UID／package UID／APK signer 核對身份並只接受固定操作。
 
-## 0.8.3 變更
+## 0.8.4 變更
 
-切頁動態、淺色色階與電話引擎診斷見 [更新紀錄](CHANGELOG.md)。分享診斷以固定欄位輸出，避免帶出 SIM 和裝置資訊。
+- 新增 `sepolicy.rule`，只對 radio → zygote 的 Unix stream socket 授予 getattr/getopt/setopt/read/write，供現有 fstat、SO_TYPE、timeout 及 framed IPC 使用。
+- 不增加 connectto、任意檔案、properties 或全域 permissive 權限。來源、App 與 hook 覆蓋的驗證界線維持原樣。
+- 記錄連線身分檢查的 errno；特化前 checkpoint 加兩個 FD 旗標不能單獨證明實際斷線原因。
+- 此版針對已觀察到的 metadata 權限拒絕修正。主機與封裝檢查不能代替真機覆驗。
 
 ## 最終建置與驗證
 
@@ -30,7 +33,7 @@ python build_native.py
 python build_companion.py --java-home "C:/path/to/jdk-21"
 python build.py
 python verify_release.py
-python privacy_guard.py --artifact dist/Haaru-0.8.3.zip --artifact dist/Haaru-0.8.3.apk --artifact dist/Haaru-0.8.3-source.zip --output dist/publication-privacy-audit.json
+python privacy_guard.py --artifact dist/Haaru-0.8.4.zip --artifact dist/Haaru-0.8.4.apk --artifact dist/Haaru-0.8.4-source.zip --output dist/publication-privacy-audit.json
 ```
 
 在 PATH 設定 JDK 21，供整包建置與 APK 驗證共用。以當次主機測試報告與 `dist/SHA256SUMS.txt`、`dist/release-verification.json`、`dist/publication-privacy-audit.json` 核對模組 ZIP、APK 與來源封裝。核對 ZIP 內的 APK 和獨立 APK 完全一致，以及簽章憑證與上一個已發佈版本相同。0.8.0 模擬器的來源指紋和數據見 [原生介面建置](UI_BUILD.md)。

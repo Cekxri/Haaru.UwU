@@ -1,5 +1,13 @@
 # 更新紀錄 / Changes
 
+## 0.8.4 — 公開預覽 / Public preview
+
+- 補上電話程序驗證及使用繼承 Zygisk socket 所需的限定 SELinux 權限，修正特化後 socket metadata 檢查遭拒而斷線的路徑。保留 socket 身分、開機身分與協議往返驗證。
+- 連線失敗日誌增加去識別 errno；兩個 FD 保留旗標不再被當成唯一故障原因。完整 KernelSU 真機套用／還原仍待覆驗。
+
+- Added narrowly scoped SELinux permissions for the phone to validate and use its inherited Zygisk socket, addressing the post-specialisation metadata denial. Socket identity, boot identity and protocol round-trip checks remain required.
+- Added de-identified errno logging and stopped inferring the cause of an early disconnect solely from FD retention flags. Full KernelSU device application and restoration remain unverified.
+
 ## 0.8.3 — 公開預覽 / Public preview
 
 - 恢復分頁進場動畫。待離開的頁面立即退出，目的頁短距離滑入。3D 雕塑使用連續的阻尼運動，即使轉場途中再切頁也會保留速度。
