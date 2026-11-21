@@ -24,3 +24,13 @@ target_compile_options(haaru PRIVATE -fvisibility=hidden -Wall -Wextra)
 target_compile_options(haaru PRIVATE "-ffile-prefix-map=${HAARU_SOURCE_ROOT}=/haaru" "-fdebug-prefix-map=${HAARU_SOURCE_ROOT}=/haaru")
 target_link_options(haaru PRIVATE -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,-z,noexecstack
     "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/exports.map")
+
+option(HAARU_BUILD_ENGINE_SMOKE "Build a separate synthetic emulator ART test library" OFF)
+if(HAARU_BUILD_ENGINE_SMOKE)
+    add_library(haaru_engine_smoke SHARED src/module.cpp src/art_symbols.cpp)
+    target_compile_definitions(haaru_engine_smoke PRIVATE HAARU_ENGINE_SMOKE=1)
+    target_include_directories(haaru_engine_smoke PRIVATE src vendor/zygisk/module/jni vendor/json/single_include)
+    target_link_libraries(haaru_engine_smoke PRIVATE lsplant_static dobby_static haaru_rust_core log dl android)
+    target_compile_options(haaru_engine_smoke PRIVATE -fvisibility=hidden -Wall -Wextra)
+    target_link_options(haaru_engine_smoke PRIVATE -Wl,-z,max-page-size=16384 -Wl,-z,noexecstack)
+endif()

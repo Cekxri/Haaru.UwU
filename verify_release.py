@@ -69,6 +69,7 @@ def main():
         assert {item["abi"] for item in native["assets"]} == set(expected)
         for asset in native["assets"]:
             data = archive.read(asset["path"])
+            assert b"Java_org_haaru_smoke_EngineSmoke" not in data, "Synthetic ART test JNI must never ship in release libraries"
             assert data[:4] == b"\x7fELF" and data[5] == 1 and sha(data) == asset["sha256"]
             assert struct.unpack_from("<H", data, 18)[0] == expected[asset["abi"]]
             bits = data[4]

@@ -1,5 +1,15 @@
 # 更新紀錄 / Changes
 
+## 9.2 — 公開預覽 / Public preview
+
+- 電話引擎不再只依賴 Application.attach 回呼：加入真實 Application Context 備援查找、LoadedApk／Instrumentation 呼叫端去最佳化，以及初始化期間持續保活。一個 worker 接續執行期，避免漏回呼或重複初始化。
+- 套用前在 publication 鎖內重核原值版本；自然 SIM 更新的暫時訊息不再遮蔽真正斷線原因。保留換卡保護、完整掛鉤覆蓋、原值還原與活動方案驗證。
+- 新增真正 ART／LSPlant 的模擬器合成測試與啟動生命週期回歸。正式 APK／模組版號為 9.2；內部 Cargo SemVer 為 9.2.0。SELinux 模式及限定 socket 規則沿用。
+
+- Added real Application Context discovery alongside the attach callback, deoptimised framework callers and kept the companion alive throughout bootstrap. One worker continues into runtime and initialisation is claimed once.
+- Rechecked the natural-value revision under the publication lock before applying an overlay. Transient natural SIM updates no longer hide transport failures. Card identity, complete hook coverage, restoration and plan validation remain required.
+- Added a synthetic emulator test of real ART/LSPlant dispatch and bootstrap lifecycle regressions. Public APK/module version is 9.2; internal Cargo SemVer is 9.2.0. SELinux mode and scoped socket rules are unchanged.
+
 ## 0.8.5 — 公開預覽 / Public preview
 
 - 修正開機時 runtime 計畫尚未有效，companion 回傳 null 而電話引擎要求 object 的回覆格式不一致。沒有已存方案時引擎可先初始化，之後接收新計畫。

@@ -1,26 +1,29 @@
-# Haaru 0.8.5 發佈準備
+# Haaru 9.2 發佈準備
 
-**0.8.5（versionCode 20）為公開預覽版。** 修正 idle runtime 的 companion 回覆格式不一致，讓電話引擎能在沒有有效計畫時先初始化。SELinux 規則沿用 0.8.4，系統模式保持不變。當版證據以 manifests 為準，真機完整套用／還原仍待覆驗，`deviceTested=false`。
+**9.2（versionCode 21）為公開預覽版。** 本版完整修訂電話引擎初始化生命週期，加入真實 Application Context 備援、呼叫端去最佳化與 boot heartbeat，並修正原值更新競態及斷線回報。SELinux 模式與限定規則保持不變。所有主機／模擬器證據均不代替真機完整驗收，`deviceTested=false`。
 
 ## 交付檔案
 
 | 檔案 | 用途 |
 | --- | --- |
-| `Haaru-0.8.5.zip` | KSU 模組與同版本已簽 APK；安裝完成後完整重啟 |
-| `Haaru-0.8.5.apk` | 原生 Miuix／GLES3 配套 App，同 package／簽章更新 |
-| `Haaru-0.8.5-source.zip` | 白名單 source，排除私人簽章／診斷／設定 |
+| `Haaru-9.2.zip` | KSU 模組與同版本已簽 APK；安裝完成後完整重啟 |
+| `Haaru-9.2.apk` | 原生 Miuix／GLES3 配套 App，同 package／簽章更新 |
+| `Haaru-9.2-source.zip` | 白名單 source，排除私人簽章／診斷／設定 |
 | `SHA256SUMS.txt` | 最終交付檔案校驗值 |
 | build／companion manifests | 實際來源／工具／版本／產物／簽章指紋 |
 | release-verification／device-report | 分開記錄發佈驗證與當前真機 scope |
 
 ZIP 的同版 App 自動安裝與 Android 未就緒時開機續裝保留；KSU 執行按鈕開啟 App 或重試安裝 ZIP 內 APK，不向 latest 取錯版本。App 無需單獨 superuser 授權，模組 IPC 以真實 peer UID／package UID／APK signer 核對身份並只接受固定操作。
 
-## 0.8.5 變更
+## 9.2 變更與驗證界線
 
-- 沒有 runtime、runtime 無效或模組 inactive 時，companion 回覆 config 空 object；producer 與 consumer 共用正式格式，idle 回覆不代表掛鉤或套用成功。
-- 完整核對 active/hash/config/shadowSaved/shadowPrepared/recoveryRequired 欄位及活動計畫的 boot 身分。
-- 105 項原生主機合約涵蓋 JSON 序列化、null 舊失敗路徑、idle、延後計畫、失效計畫及壞回覆。正式整包檢查另核對限定 socket 政策未變。
-- SELinux 政策沿用 0.8.4，不改 Enforcing／Permissive 模式。主機與封裝檢查不能代替真機覆驗。
+- attach 回呼與真實 Application Context 查找共用單次初始化；try-lock 不阻塞主線程等待 classloading worker。每秒保活，60 秒有界等待 Context，持續連線後由同一 worker 接續 runtime。
+- 去最佳化 LoadedApk／Instrumentation 的 make/newApplication 呼叫端，處理短方法已被 inlining 的情況；callee 的去最佳化不能取代 caller 去最佳化。
+- publication mutex 內先核對 baseRevision/baseVerified 再寫入覆蓋，避免以過期自然值開始套用。保留原值驗證、還原、換卡與完整掛鉤覆蓋的獨立證據。
+- 斷線回報只保留真正 bootstrap failure，不讓自然更新進度文案遮住傳輸原因。
+- 獨立 HAARU_BUILD_ENGINE_SMOKE 預設 OFF；release 不含測試 JNI。合成 emulator app_process 使用正式 ART resolver/LSPlant/installMethod，驗證 caller 去最佳化、真正 Application.attach、8,000 並行 hook/backup 呼叫和 production Context 查找。沒有 phone/SIM API 呼叫；API33 模擬器不能證明 SDK36 真機相容性。
+- 公開版本 9.2／21；Cargo 必須三段 SemVer，採 9.2.0 並於組包校驗正規化。
+- README、SELinux 規則與系統模式沿用。真機完整初始化／SIM 套用／還原仍待覆驗。
 
 ## 最終建置與驗證
 
@@ -33,7 +36,7 @@ python build_native.py
 python build_companion.py --java-home "C:/path/to/jdk-21"
 python build.py
 python verify_release.py
-python privacy_guard.py --artifact dist/Haaru-0.8.5.zip --artifact dist/Haaru-0.8.5.apk --artifact dist/Haaru-0.8.5-source.zip --output dist/publication-privacy-audit.json
+python privacy_guard.py --artifact dist/Haaru-9.2.zip --artifact dist/Haaru-9.2.apk --artifact dist/Haaru-9.2-source.zip --output dist/publication-privacy-audit.json
 ```
 
 在 PATH 設定 JDK 21，供整包建置與 APK 驗證共用。以當次主機測試報告與 `dist/SHA256SUMS.txt`、`dist/release-verification.json`、`dist/publication-privacy-audit.json` 核對模組 ZIP、APK 與來源封裝。核對 ZIP 內的 APK 和獨立 APK 完全一致，以及簽章憑證與上一個已發佈版本相同。0.8.0 模擬器的來源指紋和數據見 [原生介面建置](UI_BUILD.md)。

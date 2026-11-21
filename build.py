@@ -70,7 +70,8 @@ def main():
     args = parser.parse_args()
     properties = dict(line.split("=", 1) for line in (ROOT / "module/module.prop").read_text(encoding="utf-8").splitlines() if "=" in line)
     version = properties["version"]
-    if version != tomllib.loads((ROOT / "rust-core/Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]:
+    cargo_version = tomllib.loads((ROOT / "rust-core/Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
+    if (version + ".0" if version.count(".") == 1 else version) != cargo_version:
         raise SystemExit("Module and observer build versions must agree")
     validate_module_distribution(ROOT / "module")
     companion_manifest, companion_verified = validate_companion(ROOT, version, properties["versionCode"])

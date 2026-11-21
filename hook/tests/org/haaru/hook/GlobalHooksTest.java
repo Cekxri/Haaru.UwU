@@ -402,6 +402,13 @@ public final class GlobalHooksTest {
         scope.exitFailure = null; configure();
     }
     public static void main(String[] args) throws Throwable {
+        android.app.ActivityThread.application = null;
+        check(GlobalHooks.findApplicationContext() == null, "fallback waits for real application publication");
+        Object publishedApplication = new Object();
+        android.app.ActivityThread.application = publishedApplication;
+        check(GlobalHooks.findApplicationContext() == publishedApplication, "fallback does not require an attach callback");
+        equal(3, GlobalHooks.applicationCallers().length, "all discovered make/new application callers deoptimised; unrelated methods omitted");
+        android.app.ActivityThread.application = null;
         GlobalHooks.Installer originalInstaller = GlobalHooks.installer; GlobalHooks.Caller originalCaller = GlobalHooks.caller;
         GlobalHooks.OriginalScope originalScope = GlobalHooks.originalScope;
         try {

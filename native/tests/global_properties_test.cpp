@@ -3,6 +3,7 @@
 #include "../src/engine_diagnostics.hpp"
 #include "../src/companion_connection.hpp"
 #include "../src/companion_protocol.hpp"
+#include "../src/bootstrap_window.hpp"
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -21,6 +22,15 @@ void rejects(Function run, const char* message) {
 }
 }
 int main() {
+    haaru::BootstrapWindow startup;
+    int heartbeats = 0;
+    for (int elapsed = 0; elapsed < 60000; elapsed += 100) {
+        if (startup.heartbeatDue(elapsed)) ++heartbeats;
+
+    }
+    check(!startup.expired(59999, false), "pending Context is not timed out early");
+    check(heartbeats == 60, "missing attach callback does not leave companion idle for 60 seconds");
+    check(startup.expired(60000, false) && !startup.expired(60000, true), "only unfinished startup expires");
     // Exercise the actual producer and consumer across JSON serialisation.
     // Previously Json{} emitted null before runtime.json existed at boot.
     const std::string boot = "fixture-boot";
@@ -216,6 +226,10 @@ int main() {
         "disconnect retains last observed config hash and partial hook count");
     check(!disconnected["ok"].get<bool>() && !disconnected["initialized"].get<bool>() && !disconnected["applied"].get<bool>(),
         "complete disconnect metadata never claims engine success");
+    auto transient = receipt; transient["bootstrapFailure"] = false;
+    transient["error"] = "Natural SIM update is waiting for publication";
+    auto transport = haaru::disconnectedAck(transient, 36, "fixture-boot", 123457, 2870, "Companion response failed");
+    check(transport["error"] == "Companion response failed", "transient SIM publication text cannot hide the actual disconnect cause");
     auto pending = haaru::engineAck(false, false, false, 0, 36, "fixture-boot", "", 123458, 2870, "specialization", "");
     pending["fdExemptionReported"] = true;
     pending["fdIgnoreListAvailable"] = false;

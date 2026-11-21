@@ -315,7 +315,7 @@ internal fun shareableDiagnostics(raw: String, appearanceIssue: Boolean): String
     }
     return buildJsonObject {
         put("statusAvailable", report != null)
-        if (version != null && Regex("[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}").matches(version)) put("moduleVersion", version)
+        if (version != null && Regex("[0-9]{1,3}\\.[0-9]{1,3}(?:\\.[0-9]{1,3})?").matches(version)) put("moduleVersion", version)
         for (key in listOf("readOnly", "enabled", "upgradePending")) {
             (report?.get(key) as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull?.let { put(key, it) }
         }

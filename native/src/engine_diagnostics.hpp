@@ -53,7 +53,7 @@ inline nlohmann::json disconnectedAck(const nlohmann::json& prior, int sdk, std:
         if (prior.contains("configHash") && prior["configHash"].is_string()) hash = prior["configHash"].get<std::string>();
         if (prior.contains("hooks") && prior["hooks"].is_number_integer()) hooks = prior["hooks"].get<int>();
         if (prior.contains("stage") && prior["stage"].is_string()) stage = prior["stage"].get<std::string>();
-        if (prior.contains("error") && prior["error"].is_string() && !prior["error"].get_ref<const std::string&>().empty())
+        if (prior.value("bootstrapFailure", true) && prior.contains("error") && prior["error"].is_string() && !prior["error"].get_ref<const std::string&>().empty())
             error = prior["error"].get<std::string>();
     }
     if (stage == "specialization" && error == "Phone engine disconnected") {

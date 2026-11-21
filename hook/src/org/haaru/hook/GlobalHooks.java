@@ -196,6 +196,29 @@ public final class GlobalHooks {
         catch (Throwable failure) { failed(failure); throw failure; }
     }
 
+    /** Fallback for compiled framework callers which inline Application.attach.
+     * currentApplication is published only after the app has its real Context.
+     * Never construct a phone service or manufacture a classloader here. */
+    public static Object findApplicationContext() throws ReflectiveOperationException {
+        Class<?> thread = Class.forName("android.app.ActivityThread");
+        Method current = thread.getDeclaredMethod("currentApplication");
+        current.setAccessible(true);
+        return current.invoke(null);
+    }
+
+    public static Method[] applicationCallers() throws ReflectiveOperationException {
+        List<Method> callers = new ArrayList<Method>();
+        for (String name : new String[] {"android.app.LoadedApk", "android.app.Instrumentation"}) {
+            for (Method method : Class.forName(name).getDeclaredMethods()) {
+                if (method.getName().startsWith("makeApplication") || method.getName().equals("newApplication")) {
+                    method.setAccessible(true);
+                    callers.add(method);
+                }
+            }
+        }
+        return callers.toArray(new Method[callers.size()]);
+    }
+
     static synchronized int initializeWithLoader(ClassLoader loader) throws Throwable {
         if (installed) {
             if (installedLoader == loader && isCoverageComplete()) return installedCount;

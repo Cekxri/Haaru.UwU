@@ -10,6 +10,7 @@
 #include "engine_diagnostics.hpp"
 #include "companion_connection.hpp"
 #include "companion_protocol.hpp"
+#include "bootstrap_window.hpp"
 #include <android/api-level.h>
 #include <android/log.h>
 #include <sys/socket.h>
@@ -50,6 +51,7 @@ JavaVM* javaVm = nullptr;
 jclass binderType = nullptr, hooksType = nullptr;
 jmethodID binderUid = nullptr, initializeId = nullptr, configureId = nullptr, healthId = nullptr, healthErrorId = nullptr, notifyId = nullptr, validateId = nullptr;
 jmethodID requiredId = nullptr, coverageId = nullptr, countrySupportId = nullptr, nameSupportId = nullptr, profileSupportId = nullptr;
+jmethodID applicationContextId = nullptr;
 jobject phoneContext = nullptr, dexLoader = nullptr;
 std::vector<uint8_t> dex;
 std::atomic<int> channel{-1};
@@ -58,11 +60,13 @@ std::atomic<bool> fdExemptionReported{false}, fdIgnoreListAvailable{false}, conn
 haaru::ArtSymbols art;
 std::atomic<bool> guardsReady{false}, engineReady{false}, baselineReady{false}, started{false};
 std::atomic<bool> recoveryRequired{false};
+std::atomic<bool> centralAttempted{false}, centralFinished{false};
 std::atomic<int> hookCount{0};
 std::atomic<int> requiredHookCount{0};
 std::atomic<bool> coverageReady{false}, countrySupported{false}, nameSupported{false};
 thread_local unsigned int internalDepth = 0;
 std::mutex stateMutex, publisherMutex, channelMutex, companionMutex, diagnosticMutex;
+std::mutex initializationMutex;
 std::condition_variable wake;
 std::string baseCountry, baseName;
 std::string verifiedPhoneBoot;
@@ -106,6 +110,7 @@ Json acknowledgement(bool ok, bool initialized, bool applied, std::string_view h
     ack["fdExemptionReported"] = fdExemptionReported.load();
     ack["fdIgnoreListAvailable"] = fdIgnoreListAvailable.load();
     ack["connected"] = channel >= 0 && connectionValidated.load();
+    ack["bootstrapFailure"] = failed;
     return ack;
 }
 
@@ -719,9 +724,14 @@ bool apply(JNIEnv* env, const Json& plan, std::string& error, uint64_t& accepted
     std::string desiredCountry, desiredName;
     try { desiredCountry = haaru::overlayProperty(country, propertyValues, true); desiredName = haaru::overlayProperty(name, propertyValues, false); }
     catch (const std::exception& failure) { error = failure.what(); return false; }
-    if (!configure(env, Json::array())) { error = "Cannot suspend central response overlay"; return false; }
     {
         std::lock_guard transaction(publisherMutex);
+        { std::lock_guard lock(stateMutex);
+            if (revision != baseRevision || !baseVerified) {
+                error = "SIM values changed before application; retrying"; return false;
+            }
+        }
+        if (!configure(env, Json::array())) { error = "Cannot suspend central response overlay"; return false; }
         if (__system_property_set(kKeys[0], desiredCountry.c_str()) || readProperty(kKeys[0]) != desiredCountry ||
                 __system_property_set(kKeys[1], desiredName.c_str()) || readProperty(kKeys[1]) != desiredName) {
             __system_property_set(kKeys[0], country.c_str()); __system_property_set(kKeys[1], name.c_str());
@@ -812,8 +822,11 @@ void engineLoop() {
     { std::lock_guard lock(channelMutex); closeChannel(); }
     javaVm->DetachCurrentThread();
 }
-void attached(JNIEnv* env, jclass, jobject context) {
-    if (started.exchange(true)) return;
+void initializeContext(JNIEnv* env, jobject context) {
+    // Never block the phone main thread behind a worker loading a class whose
+    // initialiser may in turn need the main thread. Exactly one attempt wins.
+    std::unique_lock init(initializationMutex, std::try_to_lock);
+    if (!init.owns_lock() || !context || centralAttempted.exchange(true)) return;
     Internal internal;
     setStage("central-service-hooks");
     try {
@@ -835,9 +848,57 @@ void attached(JNIEnv* env, jclass, jobject context) {
         setStage("runtime");
     } catch (const std::exception& failure) { recordJniFailure(env, failure.what()); }
     catch (...) { recordJniFailure(env, "Unknown central service initialisation failure"); }
-    try { std::thread(engineLoop).detach(); }
+    centralFinished = true;
+    wake.notify_all();
+}
+void attached(JNIEnv* env, jclass, jobject context) { initializeContext(env, context); }
+void bootstrapLoop() {
+    JNIEnv* env = nullptr;
+    if (!javaVm || javaVm->AttachCurrentThread(&env, nullptr) != JNI_OK) {
+        recordFailure("engine-thread", "Cannot attach bootstrap worker to phone JavaVM");
+        checkpoint();
+        std::lock_guard lock(channelMutex); closeChannel(); return;
+    }
+    Internal internal;
+    const auto beginning = std::chrono::steady_clock::now();
+    haaru::BootstrapWindow window;
+    try {
+        while (channel >= 0 && !centralFinished) {
+            const auto now = std::chrono::steady_clock::now();
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - beginning).count();
+            if (window.heartbeatDue(elapsed)) {
+                Json response;
+                if (!exchange(Json{}, acknowledgement(false, false, false), response, "diagnostic"))
+                    throw std::runtime_error("Bootstrap companion heartbeat failed");
+                if (!haaru::validCompanionRuntimeReply(response, phoneBootId()))
+                    throw std::runtime_error("Bootstrap companion reply schema invalid");
+            }
+            if (!centralAttempted) {
+                LocalFrame frame(env);
+                requireJni(env, frame.valid, "Cannot allocate application discovery frame");
+                auto context = env->CallStaticObjectMethod(hooksType, applicationContextId);
+                requireJni(env, true, "Cannot discover the phone application Context");
+                if (context) initializeContext(env, context);
+            }
+            if (window.expired(elapsed, centralFinished)) throw std::runtime_error("Phone application Context was not published within 60 seconds");
+            std::unique_lock lock(stateMutex);
+            wake.wait_for(lock, std::chrono::milliseconds(100));
+        }
+    } catch (const std::exception& failure) { recordJniFailure(env, failure.what()); }
+    catch (...) { recordJniFailure(env, "Unknown phone bootstrap worker failure"); }
+    if (!centralFinished) {
+        checkpoint();
+        { std::lock_guard lock(channelMutex); closeChannel(); }
+        javaVm->DetachCurrentThread(); return;
+    }
+    javaVm->DetachCurrentThread();
+    engineLoop(); // The same one worker owns the runtime after initialisation.
+}
+void startBootstrapWorker() {
+    if (started.exchange(true)) return;
+    try { std::thread(bootstrapLoop).detach(); }
     catch (const std::exception& failure) {
-        recordFailure("engine-thread", std::string("Cannot start the central engine thread: ") + failure.what());
+        recordFailure("engine-thread", std::string("Cannot start the bootstrap worker: ") + failure.what());
         checkpoint();
         std::lock_guard lock(channelMutex);
         closeChannel();
@@ -848,6 +909,23 @@ void attached(JNIEnv* env, jclass, jobject context) {
         std::lock_guard lock(channelMutex);
         closeChannel();
     }
+}
+
+void initializeArtHooks(JNIEnv* env) {
+    if (!art.initialize()) throw std::runtime_error(art.error());
+    lsplant::InitInfo info{
+        .inline_hooker = [](void* target, void* replacement) -> void* {
+            void* original = nullptr;
+            return DobbyHook(target, replacement, &original) == 0 ? original : nullptr;
+        },
+        .inline_unhooker = [](void* target) { return DobbyDestroy(target) == 0; },
+        .art_symbol_resolver = [](std::string_view name) { return art.exact(name); },
+        .art_symbol_prefix_resolver = [](std::string_view name) { return art.prefix(name); },
+        .generated_class_name = "HaaruGlobal_", .generated_source_name = "HaaruGlobal",
+        .generated_field_name = "callback", .generated_method_name = "{target}",
+        .executable_memory_allocator = {}, .executable_memory_recycler = {}
+    };
+    requireJni(env, lsplant::Init(env, info), "LSPlant initialisation failed");
 }
 
 class Module : public zygisk::ModuleBase {
@@ -958,22 +1036,6 @@ void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
         if (recoveryRequired) throw std::runtime_error("An interrupted SIM update requires a full phone reboot");
         setStage("art-symbols");
         checkpoint();
-        if (!art.initialize()) throw std::runtime_error(art.error());
-        lsplant::InitInfo info{
-            .inline_hooker = [](void* target, void* replacement) -> void* {
-                void* original = nullptr;
-                return DobbyHook(target, replacement, &original) == 0 ? original : nullptr;
-            },
-            .inline_unhooker = [](void* target) { return DobbyDestroy(target) == 0; },
-            .art_symbol_resolver = [](std::string_view name) { return art.exact(name); },
-            .art_symbol_prefix_resolver = [](std::string_view name) { return art.prefix(name); },
-            .generated_class_name = "HaaruGlobal_",
-            .generated_source_name = "HaaruGlobal",
-            .generated_field_name = "callback",
-            .generated_method_name = "{target}",
-            .executable_memory_allocator = {},
-            .executable_memory_recycler = {}
-        };
         setStage("dex-loader");
         auto loaderType = env->FindClass("dalvik/system/InMemoryDexClassLoader");
         requireJni(env, loaderType != nullptr, "dalvik.system.InMemoryDexClassLoader is unavailable");
@@ -1030,7 +1092,7 @@ void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
         }
         setStage("lsplant-init");
         checkpoint();
-        requireJni(env, lsplant::Init(env, info), "LSPlant initialisation failed");
+        initializeArtHooks(env);
         setStage("dex-trust");
         for (auto cookie : cookies) requireJni(env, lsplant::MakeDexFileTrusted(env, cookie), "Cannot trust the module hook DEX");
         setStage("hook-class");
@@ -1054,6 +1116,8 @@ void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
         requireJni(env, configureId != nullptr, "GlobalHooks.configure is unavailable");
         initializeId = env->GetStaticMethodID(hooksType, "initialize", "(Ljava/lang/Object;)I");
         requireJni(env, initializeId != nullptr, "GlobalHooks.initialize is unavailable");
+        applicationContextId = env->GetStaticMethodID(hooksType, "findApplicationContext", "()Ljava/lang/Object;");
+        requireJni(env, applicationContextId != nullptr, "GlobalHooks.findApplicationContext is unavailable");
         healthId = env->GetStaticMethodID(hooksType, "isHealthy", "()Z");
         requireJni(env, healthId != nullptr, "GlobalHooks.isHealthy is unavailable");
         healthErrorId = env->GetStaticMethodID(hooksType, "getError", "()Ljava/lang/String;");
@@ -1088,8 +1152,23 @@ void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
         auto target = env->ToReflectedMethod(application, attachId, JNI_FALSE);
         requireJni(env, target != nullptr, "Cannot reflect Application.attach(Context)");
         requireJni(env, installMethod(env, target, callback) != nullptr, "Phone attach hook unavailable");
+        // Deoptimising the callee cannot remove an already inlined copy in a
+        // framework caller. Preserve the fast attach path, with the Context
+        // discovery worker as an independent fallback.
+        auto callersId = env->GetStaticMethodID(hooksType, "applicationCallers", "()[Ljava/lang/reflect/Method;");
+        requireJni(env, callersId != nullptr, "Application caller discovery is unavailable");
+        auto callers = static_cast<jobjectArray>(env->CallStaticObjectMethod(hooksType, callersId));
+        requireJni(env, callers != nullptr, "Cannot discover application callers");
+        for (jsize i = 0; i < env->GetArrayLength(callers); ++i) {
+            auto caller = env->GetObjectArrayElement(callers, i);
+            if (!lsplant::Deoptimize(env, caller))
+                __android_log_print(ANDROID_LOG_WARN, "HaaruEngine", "An application caller could not be deoptimised; Context fallback remains active");
+            requireJni(env, true, "Application caller deoptimisation failed");
+            env->DeleteLocalRef(caller);
+        }
         setStage("awaiting-application-attach");
         checkpoint();
+        startBootstrapWorker();
         return;
     } catch (const std::exception& failure) { recordJniFailure(env, failure.what()); }
     catch (...) { recordJniFailure(env, "Unknown phone post-specialization failure"); }
@@ -1109,3 +1188,20 @@ void Module::postAppSpecialize(const zygisk::AppSpecializeArgs*) {
 }
 REGISTER_ZYGISK_MODULE(Module)
 REGISTER_ZYGISK_COMPANION(companion)
+
+#ifdef HAARU_ENGINE_SMOKE
+// Built only into the separate emulator smoke target, never a release library.
+extern "C" JNIEXPORT jboolean JNICALL Java_org_haaru_smoke_EngineSmoke_init(JNIEnv* env, jclass) {
+    try { initializeArtHooks(env); return JNI_TRUE; }
+    catch (const std::exception& failure) {
+        auto type = env->FindClass("java/lang/IllegalStateException");
+        env->ThrowNew(type, failure.what()); return JNI_FALSE;
+    }
+}
+extern "C" JNIEXPORT jboolean JNICALL Java_org_haaru_smoke_EngineSmoke_hook(JNIEnv* env, jclass, jobject target, jobject callback) {
+    return installMethod(env, target, callback) ? JNI_TRUE : JNI_FALSE;
+}
+extern "C" JNIEXPORT jboolean JNICALL Java_org_haaru_smoke_EngineSmoke_deoptimize(JNIEnv* env, jclass, jobject caller) {
+    return lsplant::Deoptimize(env, caller) ? JNI_TRUE : JNI_FALSE;
+}
+#endif
