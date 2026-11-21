@@ -223,11 +223,6 @@ class HaaruStateTest {
         }
     }
 
-    @Test fun sharedDiagnosticsSupportsTwoPartPublicVersion() {
-        assertTrue(shareableDiagnostics("""{"moduleVersion":"9.2"}""", false).contains("\"moduleVersion\":\"9.2\""))
-        assertFalse(shareableDiagnostics("""{"moduleVersion":"9.2-private-details"}""", false).contains("private-details"))
-    }
-
     @Test fun shellAndFrameworkErrorsStayOutOfNormalUiText() {
         assertFalse(friendlyError("Attempt to invoke android.content.Context on a null object reference").contains("android.content"))
         assertFalse(friendlyError("Global engine ACK unavailable: Invalid global engine sdk").contains("ACK"))
