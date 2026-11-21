@@ -1,5 +1,13 @@
 # 更新紀錄 / Changes
 
+## 0.8.5 — 公開預覽 / Public preview
+
+- 修正開機時 runtime 計畫尚未有效，companion 回傳 null 而電話引擎要求 object 的回覆格式不一致。沒有已存方案時引擎可先初始化，之後接收新計畫。
+- 完整核對回覆欄位與活動計畫的開機身分。SELinux 規則沿用 0.8.4，不改系統模式。新增 idle／延後計畫／無效回覆回歸；真機完整套用／還原仍待覆驗。
+
+- Fixed the companion reply mismatch when no valid runtime plan is available at boot: idle configuration is now an empty object instead of null. The engine can initialise before a plan is saved and receive it later.
+- Validated the reply schema and boot identity of active plans. SELinux rules are unchanged from 0.8.4 and the system mode is preserved. Added idle, delayed-plan and malformed-reply regressions; full device application and restoration remain unverified.
+
 ## 0.8.4 — 公開預覽 / Public preview
 
 - 補上電話程序驗證及使用繼承 Zygisk socket 所需的限定 SELinux 權限，修正特化後 socket metadata 檢查遭拒而斷線的路徑。保留 socket 身分、開機身分與協議往返驗證。

@@ -9,6 +9,7 @@
 #include "global_properties.hpp"
 #include "engine_diagnostics.hpp"
 #include "companion_connection.hpp"
+#include "companion_protocol.hpp"
 #include <android/api-level.h>
 #include <android/log.h>
 #include <sys/socket.h>
@@ -284,8 +285,8 @@ void companion(int fd) {
             auto runtime = active ? readAt(data.value, "runtime.json", kLimit) : std::vector<uint8_t>{};
             Json config = runtime.empty() || !haaru_json_valid(runtime.data(), runtime.size()) ? Json{} : Json::parse(runtime, nullptr, false);
             if (config.is_discarded() || !validConfig(config, currentBoot)) config = Json{};
-            if (!sendJson(fd, Json{{"active", active && !config.empty()}, {"config", config}, {"hash", runtime.empty() ? "" : hash(runtime)},
-                {"shadowSaved", saved}, {"shadowPrepared", prepared}, {"recoveryRequired", recovering}})) {
+            if (!sendJson(fd, haaru::companionRuntimeReply(active, config, currentBoot,
+                    runtime.empty() ? "" : hash(runtime), saved, prepared, recovering))) {
                 transportError = "Companion response failed: " + std::string(std::strerror(errno));
                 break;
             }
@@ -427,11 +428,13 @@ void validateRetainedCompanion() {
             if (!sameSocket) channel = -1;
             return actual;
         }, [&response] {
-            return exchange(Json{}, acknowledgement(false, false, false), response, "diagnostic") &&
-                response.contains("active") && response["active"].is_boolean() &&
-                response.contains("config") && response["config"].is_object() &&
-                response.contains("hash") && response["hash"].is_string() &&
-                response.contains("recoveryRequired") && response["recoveryRequired"].is_boolean();
+            if (!exchange(Json{}, acknowledgement(false, false, false), response, "diagnostic")) return false;
+            if (!haaru::validCompanionRuntimeReply(response, phoneBootId())) {
+                __android_log_print(ANDROID_LOG_WARN, "HaaruEngine", "Companion reply schema invalid (config type=%s)",
+                    response.contains("config") ? response["config"].type_name() : "missing");
+                return false;
+            }
+            return true;
         });
     if (!connected) {
         __android_log_print(ANDROID_LOG_WARN, "HaaruEngine", "Companion validation failed (identity errno=%d, same socket=%d)",

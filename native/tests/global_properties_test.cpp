@@ -2,6 +2,7 @@
 #include "../src/global_properties.hpp"
 #include "../src/engine_diagnostics.hpp"
 #include "../src/companion_connection.hpp"
+#include "../src/companion_protocol.hpp"
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -20,6 +21,49 @@ void rejects(Function run, const char* message) {
 }
 }
 int main() {
+    // Exercise the actual producer and consumer across JSON serialisation.
+    // Previously Json{} emitted null before runtime.json existed at boot.
+    const std::string boot = "fixture-boot";
+    const nlohmann::json idlePlan{{"protocol", 2}, {"global", true}, {"engine", "system-global-volatile"},
+        {"bootId", boot}, {"enabled", false}, {"readOnly", false}, {"profiles", nlohmann::json::array()}};
+    const auto missing = haaru::companionRuntimeReply(true, nlohmann::json{}, boot, "", false, false, false);
+    check(missing["config"].is_object() && missing["config"].empty() && missing["active"] == false,
+        "missing boot plan produces an inactive empty object, never null");
+    check(haaru::validCompanionRuntimeReply(nlohmann::json::parse(missing.dump()), boot),
+        "missing boot plan survives real wire serialisation and validates the connection");
+    auto legacyNull = missing; legacyNull["config"] = nullptr;
+    check(!haaru::validCompanionRuntimeReply(legacyNull, boot), "reproduce the original null-schema rejection");
+    const auto idle = haaru::companionRuntimeReply(true, idlePlan, boot, "idle-hash", false, false, false);
+    check(haaru::validCompanionRuntimeReply(nlohmann::json::parse(idle.dump()), boot) &&
+        idle["config"]["enabled"] == false && idle["config"]["profiles"].empty(),
+        "a disabled empty plan proves connection health without enabling an override");
+    auto activePlan = idlePlan; activePlan["enabled"] = true;
+    activePlan["profiles"] = nlohmann::json::array({{{"slot", 0}, {"subId", 1}, {"country", "us"}, {"carrierName", "Fixture"}}});
+    const auto configured = haaru::companionRuntimeReply(true, activePlan, boot, "plan-hash", true, false, false);
+    check(configured["active"] == true && configured["config"] == activePlan &&
+        haaru::validCompanionRuntimeReply(nlohmann::json::parse(configured.dump()), boot),
+        "a plan published after idle bootstrap reaches the same connection without restart");
+    for (const auto& invalid : {nlohmann::json{}, nlohmann::json::array(), nlohmann::json::object(),
+            nlohmann::json::parse(R"({"protocol":2})")}) {
+        const auto reply = haaru::companionRuntimeReply(true, invalid, boot, "", false, false, false);
+        check(reply["active"] == false && haaru::validCompanionRuntimeReply(reply, boot),
+            "rejected runtime data falls back to a healthy inactive response");
+    }
+    auto wrongBoot = activePlan; wrongBoot["bootId"] = "other-boot";
+    check(haaru::companionRuntimeReply(true, wrongBoot, boot, "", false, false, false)["active"] == false,
+        "stale boot cannot activate a plan");
+    const auto disabledModule = haaru::companionRuntimeReply(false, activePlan, boot, "", false, false, true);
+    check(disabledModule["config"].empty() && disabledModule["active"] == false &&
+        disabledModule["recoveryRequired"] == true && haaru::validCompanionRuntimeReply(disabledModule, boot),
+        "module disable and recovery metadata stay distinct from transport health");
+    for (const char* key : {"active", "shadowSaved", "shadowPrepared", "recoveryRequired", "hash", "config"}) {
+        auto malformed = missing; malformed.erase(key);
+        check(!haaru::validCompanionRuntimeReply(malformed, boot), "missing reply fields cannot prove readiness");
+    }
+    auto forged = missing; forged["active"] = true;
+    check(!haaru::validCompanionRuntimeReply(forged, boot), "active empty configuration is rejected");
+    forged = configured; forged["config"]["bootId"] = "other-boot";
+    check(!haaru::validCompanionRuntimeReply(forged, boot), "active foreign-boot response is rejected");
     using haaru::CompanionSocketIdentity;
     const CompanionSocketIdentity ownedSocket{7, 101, 1, true};
     int identityReads = 0, probes = 0;
