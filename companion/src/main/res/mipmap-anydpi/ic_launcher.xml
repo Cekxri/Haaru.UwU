@@ -1,5 +1,2 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#C5E8D8" android:pathData="M0,0h108v108h-108z" />
-    <path android:fillColor="#255E4C" android:pathData="M29,44h43v20c0,11 -9,18 -21.5,18S29,75 29,64zM72,46h6c13,0 15,24 -6,24v-7c11,0 12,-11 3,-11h-3z" />
-    <path android:strokeColor="#255E4C" android:strokeWidth="4" android:strokeLineCap="round" android:fillColor="@android:color/transparent" android:pathData="M41,36c-7,-6 7,-7 1,-12M58,36c-7,-6 7,-7 1,-12" />
-</vector>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/haaru_logo" android:gravity="fill" android:filter="true" />

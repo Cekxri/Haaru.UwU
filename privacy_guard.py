@@ -12,8 +12,9 @@ ROOT = Path(__file__).resolve().parent
 EXCLUDED = {"tools", "build", "dist", "target", "test-classes", "__pycache__", ".git", ".gradle", ".kotlin", "node_modules", "kotlin-js-store"}
 PRIVATE_NAMES = {"local.properties", "keystore.properties", "signing.properties", "appearance.json", "device-report.json", "phone-rollback-report.json"}
 PRIVATE_EXTENSIONS = {".jks", ".keystore", ".p12", ".pfx", ".key", ".pem", ".log", ".class", ".o", ".obj", ".pdb", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".mp4", ".mov"}
-# Only owned, de-identified README composites may enter the public source.
-PUBLIC_README_IMAGES = {".github/assets/haaru-preview-dark.png", ".github/assets/haaru-preview-light.png"}
+# Only explicitly approved README media and the user-designated logo may ship.
+PUBLIC_README_IMAGES = {".github/assets/haaru-preview-dark.png", ".github/assets/haaru-preview-light.png",
+                       ".github/assets/haaru-logo.png", "companion/src/main/res/drawable-nodpi/haaru_logo.png"}
 FORBIDDEN = [
     ("private-key", re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----")),
     ("access-token", re.compile(rb"(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{35,}|sk-[A-Za-z0-9_-]{32,})")),

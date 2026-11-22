@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src=".github/assets/haaru-mark.svg" width="72" height="72" alt="Haaru coffee cup mark" />
+<img src=".github/assets/haaru-logo.png" width="96" height="96" alt="Haaru logo" />
 
 # Haaru
 

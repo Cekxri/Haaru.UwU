@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src=".github/assets/haaru-mark.svg" width="72" height="72" alt="Haaru 咖啡杯標誌" />
+<img src=".github/assets/haaru-logo.png" width="96" height="96" alt="Haaru 標誌" />
 
 # Haaru
 

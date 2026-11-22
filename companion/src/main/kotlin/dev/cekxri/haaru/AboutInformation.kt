@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -154,9 +157,13 @@ private fun AboutBrandStage(moduleVersion: String, modifier: Modifier = Modifier
     val colours = HaaruTheme.colours
     Box(modifier.fillMaxWidth().heightIn(min = 280.dp), contentAlignment = Alignment.BottomStart) {
         Column(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Text("Haaru", color = colours.onBackground,
-                style = MiuixTheme.textStyles.headline1.copy(fontSize = 44.sp, lineHeight = 51.sp, letterSpacing = (-1.1).sp),
-                fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Image(painter = painterResource(R.drawable.haaru_logo), contentDescription = "Haaru 標誌",
+                    contentScale = ContentScale.Fit, modifier = Modifier.size(64.dp))
+                Text("Haaru", color = colours.onBackground,
+                    style = MiuixTheme.textStyles.headline1.copy(fontSize = 44.sp, lineHeight = 51.sp, letterSpacing = (-1.1).sp),
+                    fontWeight = FontWeight.SemiBold)
+            }
             Text("城堡之下的SIM國度.咖啡廳☕", color = colours.onSurfaceVariant,
                 style = MiuixTheme.textStyles.footnote1.copy(fontSize = 13.sp, lineHeight = 20.sp))
             Text("App ${BuildConfig.VERSION_NAME} · 模組 ${moduleVersion.ifBlank { "尚未連接" }}",
