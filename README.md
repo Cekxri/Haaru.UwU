@@ -4,7 +4,7 @@
 
 # Haaru
 
-<p><strong>透過調整 SIM 歸屬地，解除 App 與服務的 SIM 地區限制。</strong><br />對齊 Nrfr 的用途，以 KernelSU 模組與原生 Android App 實現。</p>
+<p><strong>在系統電話服務層覆寫 SIM 國家與電信商名稱。</strong><br />原創 KernelSU 模組，讓 App 讀取你設定的 SIM 回報值。</p>
 
 <p>
   <a href="https://github.com/Cekxri/Haaru.UwU/releases"><img src="https://img.shields.io/github/v/release/Cekxri/Haaru.UwU?include_prereleases&amp;label=preview&amp;color=81709c&amp;style=flat-square" alt="最新測試版" /></a>
@@ -15,7 +15,7 @@
 
 **繁體中文** · [English](README.en.md)
 
-[**下載模組**](https://github.com/Cekxri/Haaru.UwU/releases) · [使用情境](#使用情境) · [安裝](#安裝) · [功能](#功能) · [常見問題](#常見問題) · [問題回報](https://github.com/Cekxri/Haaru.UwU/issues)
+[**下載模組**](https://github.com/Cekxri/Haaru.UwU/releases) · [修改範圍](#模組實際修改什麼) · [功能](#功能) · [安裝](#安裝) · [常見問題](#常見問題) · [問題回報](https://github.com/Cekxri/Haaru.UwU/issues)
 
 <sub>城堡之下的SIM國度.咖啡廳☕</sub>
 
@@ -32,20 +32,22 @@
 
 ---
 
-**Haaru 的核心目標是達成與 Nrfr 相同的使用效果：讓 TikTok 等服務讀到你設定的 SIM 歸屬地，解除因 SIM 地區檢測造成的使用限制。** 例如插入中國 SIM 後，TikTok 因 SIM 歸屬地被限制而持續提示網路錯誤，Haaru 的目標就是透過回報受支援的 SIM 國家，讓這類服務恢復使用。
+Haaru 是一個 **在系統電話服務層覆寫 SIM 回報資料的 KernelSU 模組**。你為每張 SIM 設定國家碼與電信商名稱，電話引擎在系統對外提供這些資料時套用設定，讓讀取對應 Android 介面的 App 取得覆寫值。國家碼與名稱可以獨立設定，也可以停止覆寫、還原原值。
 
-你可以為每張 SIM 選擇 Android 回報的國家與電信商名稱，也能隨時還原。從 **28 個國家、74 個電信商預設值**中選擇，或輸入自訂名稱；國家與名稱可以分開設定。
+它以不同於 Nrfr 的架構實現相同用途：改變服務讀到的 SIM 歸屬地，用來解除依 SIM 地區檢測的使用限制。TikTok 因中國 SIM 歸屬地檢測提示網路錯誤，是本專案要解決的典型情境。
 
-原生 App 使用 Miuix 控件、液態玻璃導航與程序化 3D 雕塑。外觀隨目前配色一起變化，草稿、已儲存方案和引擎確認分開呈現。
+## 模組實際修改什麼
+
+- **SIM 國家碼** — 覆寫 CarrierConfig 回傳副本中的 SIM 國家欄位、SubscriptionInfo 回傳副本的國家欄位，以及 `gsm.sim.operator.iso-country` 非持久屬性。例如為 SIM 1 設定 `JP`，對應讀取路徑便以 `jp` 回報該卡國家。
+- **電信商名稱** — 覆寫 CarrierConfig 的名稱與覆寫旗標、SubscriptionInfo 副本的電信商／顯示名稱，以及 `gsm.sim.operator.alpha` 非持久屬性。名稱不會自動替你更換國家碼。
+- **逐卡套用與原值還原** — 方案依 SIM 身分保存，再映射到目前的訂閱與插槽；引擎保留原值、追蹤系統自然更新，還原時撤下覆寫。未選擇的卡與欄位保留原值。
+
+這些修改由 **系統電話程序中的 Zygisk／LSPlant 引擎**執行，原生 App 負責選擇、保存方案及顯示狀態。介面不是只改自己的文字；模組的作用位置是其他 App 讀取 SIM 資料的系統回應與屬性。
+
+Haaru 從 **28 個國家、74 個電信商預設值**提供選擇，也支援自訂名稱。原生介面採用 Miuix、液態玻璃導航、程序化 3D 與動態配色。
 
 > [!NOTE]
-> Haaru 目前為公開測試版。建置與合成環境檢查已完成，KernelSU 真機的完整套用及還原仍待驗證。Android 10 是安裝底線，不代表所有 ROM 都已相容。
-
-## 使用情境
-
-- **TikTok 的 SIM 地區限制** — 針對因中國 SIM 歸屬地檢測而出現的網路錯誤或使用限制，讓 App 讀到設定的受支援國家。
-- **其他依 SIM 地區檢查的服務** — 對齊 Nrfr 的同類用途，例如 Samsung Health 首次 SIM 地區檢查；個別服務的實際結果需要相容性驗證。
-- **SIM 地區識別不符** — 調整系統對外回報的國家或電信商名稱，讓讀取這些資料的 App 使用設定值。
+> Haaru 目前為公開測試版。上述是目前原始碼的修改機制；完整 KernelSU 真機套用、還原與個別服務效果仍待驗證。Android 10 是安裝底線，不代表所有 ROM 都已相容。
 
 ## 功能
 
@@ -97,15 +99,19 @@
 
 ## 如何運作
 
-原生 App 透過本機 socket 把固定操作交給模組服務。服務核對連線 UID、App 套件與簽章；App 本身不呼叫 `su`。
+1. **App 保存方案** — 原生 App 透過受限本機 socket 把操作交給模組服務；服務核對連線 UID、App 套件與簽章。App 本身不呼叫 `su`。
+2. **電話引擎套用覆寫** — Zygisk 把引擎載入系統電話程序，LSPlant 掛鉤 CarrierConfig 與訂閱資料讀取方法。引擎修改回傳副本及上述兩項非持久屬性，並核對原值、SIM 映射和覆寫後的回讀。
+3. **App 讀取設定值** — 經已覆蓋介面讀取 SIM 國家／名稱的 App 取得設定值，這是影響服務 SIM 地區判定的介入點。已儲存方案、引擎確認與實際服務解除限制是不同驗證結果。
 
-電話引擎透過 Zygisk 在系統電話程序中掛鉤，修改回傳資料的副本及兩項非持久 SIM properties，並保存原值供還原。掛鉤覆蓋、SIM 映射、原值與引擎確認不足時，方案不會被視為已生效。
-
-**服務讀到的 SIM 國家就是 Haaru 的介入點。** App 如果以 SIM 歸屬地判斷是否允許使用，調整這個回報值便是解除該項限制的技術路徑。實體 SIM、APN、eSIM／Subscription 資料庫及 MCC/MNC 保持原樣。
-
-IP、GPS、帳號或服務端規則可能是同一服務的其他檢查條件，Haaru 不直接修改這些資料。這與解除 SIM 檢測限制是不同層次；實際相容性以服務版本、裝置與驗證結果為準。
+實體 SIM、APN、eSIM／Subscription 資料庫及 MCC/MNC 不在修改範圍內。IP、GPS、帳號等也不是這個模組的修改項目；服務若另外使用它們判斷地區，需要分別處理，這不否定 SIM 地區覆寫的用途。
 
 設定保存在本機模組資料夾，Haaru 沒有遙測。模組沿用系統的 SELinux 模式；Enforcing 不會被關閉，現有規則只補上電話引擎 socket 所需的限定權限。
+
+### 使用情境
+
+- **TikTok 與同類服務** — 針對 SIM 國家檢測造成的網路錯誤或使用限制，回報使用者選擇的受支援國家。
+- **其他依 SIM 地區檢查的服務** — 對齊 Nrfr 的同類用途，例如 Samsung Health 首次 SIM 地區檢查；個別服務仍需實測相容性。
+- **SIM 資料識別不符** — 調整對外回報的國家或電信商名稱，讓讀取這些欄位的 App 使用設定值。
 
 ## 常見問題
 
@@ -131,11 +137,9 @@ APK 是介面。實際電話引擎與受驗證的本機服務由 KernelSU 模組
 </details>
 
 <details>
-<summary><strong>Haaru 如何解除 TikTok 等服務的 SIM 地區限制？</strong></summary>
+<summary><strong>Haaru 與 Nrfr 的差別是什麼？</strong></summary>
 
-讓 App 讀到你設定的 SIM 國家，取代造成限制的原始歸屬地。這正是 Haaru 對齊 Nrfr 的核心用途；中國 SIM 觸發 TikTok 網路錯誤，是本專案要解決的典型情境。
-
-目標是解除 SIM 檢測造成的限制，個別服務還可能有其他檢查條件。Haaru 目前仍是測試版，完整真機服務效果待驗證；Nrfr 的成功案例不會被當成 Haaru 已驗證的結果。
+用途對齊 Nrfr：調整服務讀到的 SIM 歸屬地，解除由 SIM 地區檢測造成的限制。Haaru 使用 KernelSU、Zygisk 與系統電話服務回傳副本／非持久屬性覆寫，並提供獨立的原生介面、逐卡方案與引擎確認；不是直接移植 Nrfr 的實作。
 
 </details>
 
