@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parent
 EXCLUDED = {"tools", "build", "dist", "target", "test-classes", "__pycache__", ".git", ".gradle", ".kotlin", "node_modules", "kotlin-js-store"}
 PRIVATE_NAMES = {"local.properties", "keystore.properties", "signing.properties", "appearance.json", "device-report.json", "phone-rollback-report.json"}
 PRIVATE_EXTENSIONS = {".jks", ".keystore", ".p12", ".pfx", ".key", ".pem", ".log", ".class", ".o", ".obj", ".pdb", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".mp4", ".mov"}
+# Only owned, de-identified README composites may enter the public source.
+PUBLIC_README_IMAGES = {".github/assets/haaru-preview-dark.png", ".github/assets/haaru-preview-light.png"}
 FORBIDDEN = [
     ("private-key", re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----")),
     ("access-token", re.compile(rb"(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{35,}|sk-[A-Za-z0-9_-]{32,})")),
@@ -25,7 +27,8 @@ def publishable(name):
     if parts and parts[0].lower() in {"upstream", "ui", "research"}: return False
     if str(p).replace("\\", "/") in {"build_ui.py", "tests/ui_browser_test.mjs", "tests/ui_probe.mjs"}: return False
     if any(part.lower() in EXCLUDED for part in parts): return False
-    if p.name.lower() in PRIVATE_NAMES or p.suffix.lower() in PRIVATE_EXTENSIONS: return False
+    if p.name.lower() in PRIVATE_NAMES: return False
+    if p.suffix.lower() in PRIVATE_EXTENSIONS and p.as_posix() not in PUBLIC_README_IMAGES: return False
     if len(parts) >= 2 and parts[:2] == ("module", "data"): return False
     if str(p).replace("\\", "/").startswith("native/vendor/dobby/"): return False
     if str(p).replace("\\", "/").startswith("native/vendor/") and any(part in {"docs", "tests", "test", "example", "examples", ".github"} for part in parts): return False

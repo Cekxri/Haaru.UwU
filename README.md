@@ -1,87 +1,161 @@
 <div align="center">
 
+<img src=".github/assets/haaru-mark.svg" width="72" height="72" alt="Haaru 咖啡杯標誌" />
+
 # Haaru
 
-**城堡之下的SIM國度.咖啡廳☕**
+<p><strong>在 KernelSU 設定 Android 回報的 SIM 國家與電信商名稱。</strong><br />每張 SIM 獨立保存方案，搭配原生 Android 介面。</p>
 
-給 SIM 的小小咖啡廳。選好一個地方，再慢慢喝咖啡。
+<p>
+  <a href="https://github.com/Cekxri/Haaru.UwU/releases"><img src="https://img.shields.io/github/v/release/Cekxri/Haaru.UwU?include_prereleases&amp;label=preview&amp;color=81709c&amp;style=flat-square" alt="最新測試版" /></a>
+  <a href="#安裝"><img src="https://img.shields.io/badge/Android-10%2B-647d71?style=flat-square" alt="Android 10 以上" /></a>
+  <a href="https://github.com/tiann/KernelSU"><img src="https://img.shields.io/badge/KernelSU-module-647d71?style=flat-square" alt="KernelSU 模組" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-81709c?style=flat-square" alt="Apache License 2.0" /></a>
+</p>
 
-^ ܸ⩌⩊⩌ ܸ^
+**繁體中文** · [English](README.en.md)
 
-[繁體中文](#中文) · [English](#english) · [下載 / Download](https://github.com/Cekxri/Haaru.UwU/releases)
+[**下載模組**](https://github.com/Cekxri/Haaru.UwU/releases) · [安裝](#安裝) · [功能](#功能) · [常見問題](#常見問題) · [問題回報](https://github.com/Cekxri/Haaru.UwU/issues)
+
+<sub>城堡之下的SIM國度.咖啡廳☕</sub>
+
+<br />
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/haaru-preview-dark.png" />
+  <img src=".github/assets/haaru-preview-light.png" width="1100" alt="Haaru 原生介面：紫色首頁的 SIM 方案與 3D 雕塑，以及外觀設定頁。畫面來自模擬器，使用合成資料。" />
+</picture>
+
+<sub>0.8.3 原生介面預覽 · 模擬器合成資料，並非真機生效證據</sub>
 
 </div>
 
-<a id="中文"></a>
-
-## 你好，這裡是 Haaru ☁️
-
-Haaru 是 KernelSU 模組，讓你替每張 SIM 選擇 Android 回報的國家與電信商名稱。介面有 Miuix，也有一點玻璃、柔和的色調和跟手的動態效果。
-
-可以從 **28 個國家、74 個電信商** 裡挑選，也可以寫自己的名稱。兩張卡各自設定，更多插槽也會依系統提供的資料顯示；不會把某一台手機的插槽資料寫死在程式裡。
-
-### 先坐下，再開始 ☕
-
-1. 到 [Releases](https://github.com/Cekxri/Haaru.UwU/releases) 下載模組 ZIP。
-2. 在 KernelSU 刷入，然後完整重新開機。
-3. 從桌面或模組的執行按鈕開啟 Haaru。
-4. 選好 SIM、國家或名稱，按儲存，等介面確認生效。
-
-**同版本 App 已放在 ZIP 裡，刷入時會自動安裝。** Android 還沒準備好時，會在開機後完成。離線也能安裝，舊 ZIP 不會另外抓最新 APK；App 不需要再授予 Root。
-
-介面只使用原生 App。模組執行按鈕會開啟 App；若尚未安裝，會重試安裝 ZIP 內的同版本 APK。
-
-需要 KernelSU 和能正常工作的 Zygisk provider。Android 10 以上是起點；Haaru 會檢查實際電話服務介面，沒有品牌或機型白名單。不同系統仍可能有差異，必要介面不足時會說明原因，不會把「已儲存」當成「已生效」。
-
-### 幾件小事 🍞
-
-- 國家和名稱可以分開改；選電信商不會偷偷換國家。
-- 「還原」停止套用，保留你的方案；「清除設定」才把方案刪掉。
-- 更新可直接刷新版 ZIP，再完整重啟。安裝器會安全遷移早期 Haaru 的設定，避免新舊引擎同時執行。
-- 變動限於系統回報值，實體 SIM、APN、IP 和 GPS 不會因此換地區，也不能保證某個 App 的服務端判定會跟著改變。
-- 設定留在模組資料夾，沒有遙測。移除模組後完整重啟，介面 App 也可另外移除。
-- 支援的 Android 12 以上裝置可開啟 Google Monet 桌布動態色彩，也可選 15 種配色，或用色彩選擇器調整自己的顏色。
-
-剛安裝時沒有預設方案。看到「暖機～中」就等一下；如果顯示錯誤，到工具頁看簡短狀態，需要時再展開診斷。
-
-想看詳細相容性、原理或自行建置，可以翻 [相容性與功能](FEATURE_PARITY.md)、[建置說明](UI_BUILD.md) 和 [授權來源](NOTICE)。編譯與測試通過，不等於所有 ROM 都已實機驗證。
-
 ---
 
-<a id="english"></a>
+Haaru 讓你為各張 SIM 選擇 Android 回報的國家與電信商名稱，也能隨時還原。從 **28 個國家、74 個電信商預設值**中選擇，或輸入自訂名稱；國家與名稱可以分開設定。
 
-## Welcome to Haaru ☁️
+原生 App 使用 Miuix 控件、液態玻璃導航與程序化 3D 雕塑。外觀隨目前配色一起變化，草稿、已儲存方案和引擎確認分開呈現。
 
-A little café for your SIM settings. Coffee first, then pick a country. ☕
+> [!NOTE]
+> Haaru 目前為公開測試版。建置與合成環境檢查已完成，KernelSU 真機的完整套用及還原仍待驗證。Android 10 是安裝底線，不代表所有 ROM 都已相容。
 
-Haaru is a KernelSU module for the SIM country and carrier name that Android reports. Choose from **28 countries and 74 carriers**, or use your own name. Each SIM keeps its own settings. Miuix, soft colours and a moving glass navigation bar make up the companion App.
+## 功能
 
-### Come in
+### SIM 方案
 
-1. Download the module ZIP from [Releases](https://github.com/Cekxri/Haaru.UwU/releases).
-2. Flash it in KernelSU and fully reboot.
-3. Open Haaru from your launcher or the module action button.
-4. Pick a SIM, save your country or name, and wait for the confirmed status.
+- **每張卡各自保存** — 依系統提供的插槽與訂閱資料顯示 SIM，分別保存國家和名稱。
+- **預設與自訂** — 28 國、74 個電信商預設值；國家與名稱獨立選擇。
+- **重新套用、還原、清除** — 停止覆寫時可以保留方案，之後再套用。
+- **確認實際狀態** — 已儲存不等於已生效；完整掛鉤與新鮮引擎回報是不同檢查。
 
-**The ZIP includes its matching App and installs it for you.** If Android is not ready during flashing, installation finishes after boot. It works offline and never pairs an old ZIP with a random latest APK. The App needs no separate Root grant.
+### 原生介面
 
-The interface uses the native App. The module action button opens it, or retries installation of the matching APK from the ZIP if it is missing.
+- **Miuix 與液態玻璃** — 原生控件、背景取樣與折射的導航底欄。
+- **真正的 3D 場景** — GLES 有機網格、金屬與玻璃材質、漂浮、觸摸彈簧與滾動視差。
+- **你的配色** — Google Monet、15 種手動色、HSV／自訂色碼及五種色彩風格。
+- **動態可以減少** — 遵循系統移除動畫設定，也可在 App 裡調整。
 
-You need KernelSU and a working Zygisk provider. Android 10+ is the starting point. Haaru checks the phone services it finds rather than a device-model whitelist. ROMs can still differ: unsupported interfaces produce a clear error, and saved settings are never presented as proof that they took effect.
+## 安裝
 
-### A few small notes 🍞
+### 需要什麼
 
-- Country and carrier name are independent choices.
-- Restore stops applying a plan and keeps it. Clear deletes the saved plan.
-- Flash a newer ZIP and fully reboot to update. Earlier Haaru settings are migrated with checks that prevent both engines from running together.
-- This changes reported values. It does not relocate your physical SIM, APN, IP or GPS, and it cannot promise an App’s server-side region will change.
-- Settings stay in the module folder. There is no telemetry. Uninstall the module and fully reboot; the companion App can be removed separately.
-- On supported Android 12+ devices, you can enable Google Monet wallpaper colours, choose from 15 palettes or adjust your own colour in the picker.
+- **Android 10 或更新版本**，以及已安裝的 **KernelSU**。
+- 正常工作的 **Zygisk API 4 提供程式**，例如 [Zygisk Next](https://github.com/Dr-TSNG/ZygiskNext)。KernelSU 本身不提供 Zygisk。
+- 系統電話服務、ART 與必要掛鉤介面可用。Haaru 依實際介面探測，不使用機型白名單。
 
-A fresh install has no active plan. If Haaru is warming up, give it a moment. If something goes wrong, the tools page keeps the details out of your way until you need them.
+模組提供 arm64-v8a、armeabi-v7a、x86_64 和 x86 四種架構。Monet 動態取色需要 Android 12 以上；玻璃效果依系統能力降級。
 
-For the less cosy bits, see [features and compatibility](FEATURE_PARITY.md), [building Haaru](UI_BUILD.md) and [credits](NOTICE). Passing build checks is not a claim that every ROM has been tested.
+### 下載與開始使用
 
----
+1. 在 [Releases](https://github.com/Cekxri/Haaru.UwU/releases) 下載 `Haaru-<版本>.zip`。
+2. 在 KernelSU 的模組頁從檔案安裝 ZIP，然後**完整重新開機**。
+3. 從桌面，或 KernelSU 模組的執行按鈕開啟 Haaru。
+4. 選擇 SIM、國家及電信商名稱，儲存方案，再查看引擎確認結果。
 
-Made by **Cekxri** · Apache-2.0 · [Haaru.UwU](https://github.com/Cekxri/Haaru.UwU)
+**ZIP 已附同版本的簽署 App。** 安裝器會自動安裝；Android 尚未就緒時，在開機後續裝。App 不需另授予 Root，安裝也不會另外下載不同版本的 APK。
+
+| Release 檔案 | 用途 |
+| :--- | :--- |
+| `Haaru-<版本>.zip` | 在 KernelSU 安裝的模組，內附配套 App。 |
+| `Haaru-<版本>.apk` | 同版本的獨立 App；單獨安裝不會提供模組引擎。 |
+| `Haaru-<版本>-source.zip` | 該版本的來源快照。 |
+| `SHA256SUMS.txt` | 下載檔案的 SHA-256 校驗值。 |
+
+### 更新與移除
+
+**更新：** 直接安裝新版模組 ZIP，完整重啟。配套 App 使用相同簽章更新，既有 SIM 方案與外觀設定會保留；早期設定由遷移流程處理。
+
+**移除：** 在 KernelSU 移除模組後完整重啟，讓電話程序重新啟動並清除記憶體中的覆寫。介面 App 可另外解除安裝。
+
+## 如何運作
+
+原生 App 透過本機 socket 把固定操作交給模組服務。服務核對連線 UID、App 套件與簽章；App 本身不呼叫 `su`。
+
+電話引擎透過 Zygisk 在系統電話程序中掛鉤，修改回傳資料的副本及兩項非持久 SIM properties，並保存原值供還原。掛鉤覆蓋、SIM 映射、原值與引擎確認不足時，方案不會被視為已生效。
+
+**這調整的是系統回報值。** 不修改實體 SIM、APN、eSIM／Subscription 資料庫或 MCC/MNC，也不改 IP、GPS、帳號或 TikTok 服務端的地區判定。
+
+設定保存在本機模組資料夾，Haaru 沒有遙測。模組沿用系統的 SELinux 模式；Enforcing 不會被關閉，現有規則只補上電話引擎 socket 所需的限定權限。
+
+## 常見問題
+
+<details>
+<summary><strong>為什麼只裝 APK 不能使用？</strong></summary>
+
+APK 是介面。實際電話引擎與受驗證的本機服務由 KernelSU 模組提供，需要安裝模組 ZIP 並完整重啟。
+
+</details>
+
+<details>
+<summary><strong>「已儲存」為什麼不代表「已生效」？</strong></summary>
+
+儲存只確認方案已寫入。生效還需要電話引擎初始化、必要掛鉤完整，以及與目前方案一致的有效回報。引擎未就緒時，到工具頁查看詳細狀態。
+
+</details>
+
+<details>
+<summary><strong>還原與清除有什麼差別？</strong></summary>
+
+還原停止覆寫並保留已存方案，之後可重新套用。清除會還原並刪除 SIM 方案；外觀設定保留。
+
+</details>
+
+<details>
+<summary><strong>可以保證 TikTok 或其他 App 變成指定地區嗎？</strong></summary>
+
+不能。App 可能使用 IP、GPS、帳號、快取或服務端資料判斷地區。Haaru 的作用範圍是 Android 回報的 SIM 國家與電信商名稱。
+
+</details>
+
+<details>
+<summary><strong>遇到引擎錯誤，回報哪些資料？</strong></summary>
+
+先確認模組與 App 版本相符，更新後已完整重啟。回報版本、Android 版本、Zygisk 提供程式與版本、重現步驟，以及工具頁的「複製去識別診斷」。
+
+完整 Bugreport 及模組資料可能包含裝置或 SIM 資訊，請先檢查並移除個人資料，勿直接貼到公開 Issue。
+
+</details>
+
+## 開發與貢獻
+
+Haaru 使用 Kotlin／Compose 建立原生介面，Java 處理 Android 服務及反射介面，Rust 提供資料驗證與遷移，C++ 連接 Zygisk、ART 與 LSPlant。
+
+從 [Release 建置說明](RELEASE.md#最終建置與驗證)開始；[原生介面建置](UI_BUILD.md)涵蓋工具鏈、配色、3D 渲染及效能驗證界線。公開來源不含私人簽章金鑰、裝置紀錄或執行期設定。
+
+歡迎透過 [Issues](https://github.com/Cekxri/Haaru.UwU/issues) 回報可重現的問題或提出功能建議，也歡迎提交 [Pull request](https://github.com/Cekxri/Haaru.UwU/pulls)。涉及電話服務或掛鉤的修改，請說明測試環境、驗證範圍與還原行為。
+
+## 授權與鳴謝
+
+Haaru 由 [Cekxri](https://github.com/Cekxri) 維護，使用 [Apache License 2.0](LICENSE)。第三方程式碼與資產保留各自授權，完整資訊見 [NOTICE](NOTICE)。
+
+專案起於研究 [tiktok-region-hook](https://github.com/kjqg-cn/tiktok-region-hook) 與 [Nrfr](https://github.com/a5533348/Nrfr)，之後以不同架構發展為 Haaru。Nrfr 的功能與選擇資料來源照實保留鳴謝。
+
+介面與引擎建立在 [Miuix](https://github.com/compose-miuix-ui/miuix)、[AndroidLiquidGlass／Backdrop](https://github.com/Kyant0/AndroidLiquidGlass)、[MaterialKolor](https://github.com/jordond/materialkolor)、[LSPlant](https://github.com/LSPosed/LSPlant) 與其他開源專案之上。
+
+<div align="center">
+
+<br />
+
+[下載](https://github.com/Cekxri/Haaru.UwU/releases) · [源碼](https://github.com/Cekxri/Haaru.UwU) · [回報問題](https://github.com/Cekxri/Haaru.UwU/issues) · [English](README.en.md)
+
+</div>

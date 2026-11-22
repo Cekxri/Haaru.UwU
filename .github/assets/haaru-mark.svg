@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-label="Haaru">
+  <title>Haaru coffee cup</title>
+  <desc>Adapted from Haaru's native launcher vector. Apache-2.0.</desc>
+  <rect width="108" height="108" rx="28" fill="#c5e8d8"/>
+  <path fill="#255e4c" d="M26 42h47v23c0 12-9 19-23.5 19S26 77 26 65zm47 2h7c11 0 13 26-7 26v-7c10 0 11-12 2-12h-2z"/>
+  <path fill="none" stroke="#255e4c" stroke-width="4" stroke-linecap="round" d="M40 31c-7-8 8-9 1-18m15 18c-7-8 8-9 1-18"/>
+</svg>
