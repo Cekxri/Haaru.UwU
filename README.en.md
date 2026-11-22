@@ -4,7 +4,7 @@
 
 # Haaru
 
-<p><strong>Set the SIM country and carrier name Android reports, through KernelSU.</strong><br />Individual plans for each SIM, with a native Android interface.</p>
+<p><strong>Change the reported SIM region to remove SIM-based restrictions in apps and services.</strong><br />Nrfr’s use case, implemented through KernelSU and a native Android App.</p>
 
 <p>
   <a href="https://github.com/Cekxri/Haaru.UwU/releases"><img src="https://img.shields.io/github/v/release/Cekxri/Haaru.UwU?include_prereleases&amp;label=preview&amp;color=81709c&amp;style=flat-square" alt="Latest preview release" /></a>
@@ -15,7 +15,7 @@
 
 [繁體中文](README.md) · **English**
 
-[**Download the module**](https://github.com/Cekxri/Haaru.UwU/releases) · [Installation](#installation) · [Features](#features) · [FAQ](#faq) · [Report an issue](https://github.com/Cekxri/Haaru.UwU/issues)
+[**Download the module**](https://github.com/Cekxri/Haaru.UwU/releases) · [Use cases](#use-cases) · [Installation](#installation) · [Features](#features) · [FAQ](#faq) · [Report an issue](https://github.com/Cekxri/Haaru.UwU/issues)
 
 <sub>城堡之下的SIM國度.咖啡廳☕</sub>
 
@@ -32,12 +32,20 @@
 
 ---
 
-Haaru lets you choose the SIM country and carrier name Android reports for each card, and restore the original values when you need to. Pick from **28 countries and 74 carrier presets**, or enter a custom name. Country and carrier name are independent choices.
+**Haaru’s core goal is to achieve the same practical effect as Nrfr: let TikTok and other services read the SIM region you choose, removing restrictions caused by SIM-region checks.** A typical target is TikTok repeatedly reporting a network error because a Chinese SIM is inserted. Haaru aims to restore access by reporting a supported SIM country.
+
+Choose the SIM country and carrier name Android reports for each card, and restore the original values when needed. Pick from **28 countries and 74 carrier presets**, or enter a custom name. Country and carrier name are independent choices.
 
 The native App combines Miuix controls, liquid glass navigation and procedural 3D sculptures. Materials follow the current colour theme, while drafts, saved plans and engine confirmation have separate states.
 
 > [!NOTE]
 > Haaru is a public preview. Build and synthetic-environment checks have passed; full KernelSU device application and restoration remain unverified. Android 10 is the installation minimum, not a guarantee of compatibility with every ROM.
+
+## Use cases
+
+- **TikTok’s SIM-region restrictions** — Address network errors or access restrictions triggered by a Chinese SIM’s region, by reporting the selected supported country to the App.
+- **Other services with SIM-region checks** — Target the same class of use cases as Nrfr, including Samsung Health’s initial SIM-region check. Results for each service require compatibility testing.
+- **Incorrect SIM-region identification** — Adjust the reported country or carrier name so Apps reading those values receive the chosen settings.
 
 ## Features
 
@@ -93,7 +101,9 @@ The native App sends fixed operations to the module service through a local sock
 
 Through Zygisk, the engine hooks the system phone process, changes copies of returned data and two non-persistent SIM properties, and keeps the original values for restoration. Incomplete hook coverage, SIM mapping, original-value checks or engine confirmation cannot establish that a plan took effect.
 
-**This changes reported values.** It does not modify the physical SIM, APN, eSIM/Subscription database or MCC/MNC. It does not change your IP address, GPS location, account or TikTok's server-side region decision.
+**The SIM country a service reads is Haaru’s intervention point.** When an App uses the SIM region to decide whether access is allowed, changing that reported value is the technical route to removing that restriction. The physical SIM, APN, eSIM/Subscription database and MCC/MNC are preserved.
+
+IP addresses, GPS, accounts or server-side rules may be additional checks used by the same service. Haaru does not directly modify those inputs. They are separate from the SIM-based restriction; compatibility depends on the service version, device and verification results.
 
 Preferences live in the local module folder. Haaru has no telemetry. The module preserves the system's SELinux mode: Enforcing is not disabled, and the existing rules add only scoped permissions needed by the phone engine's socket.
 
@@ -121,9 +131,11 @@ Restore stops the overrides and keeps the saved plans so they can be reapplied. 
 </details>
 
 <details>
-<summary><strong>Will TikTok or another App switch to my chosen region?</strong></summary>
+<summary><strong>How does Haaru address SIM-region restrictions in TikTok and other services?</strong></summary>
 
-There is no guarantee. Apps may use IP addresses, GPS, accounts, cached data or server-side information to decide a region. Haaru's scope is the SIM country and carrier name Android reports.
+It lets the App read the SIM country you choose instead of the original region that triggers the restriction. This is Haaru’s core use case, aligned with Nrfr. TikTok network errors triggered by a Chinese SIM are a typical problem the project aims to solve.
+
+The target is the restriction caused by SIM checks; a service may also apply other checks. Haaru remains a preview and full device-level service results are pending verification. Nrfr’s successful examples are not treated as verified Haaru results.
 
 </details>
 

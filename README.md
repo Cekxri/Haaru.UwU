@@ -4,7 +4,7 @@
 
 # Haaru
 
-<p><strong>在 KernelSU 設定 Android 回報的 SIM 國家與電信商名稱。</strong><br />每張 SIM 獨立保存方案，搭配原生 Android 介面。</p>
+<p><strong>透過調整 SIM 歸屬地，解除 App 與服務的 SIM 地區限制。</strong><br />對齊 Nrfr 的用途，以 KernelSU 模組與原生 Android App 實現。</p>
 
 <p>
   <a href="https://github.com/Cekxri/Haaru.UwU/releases"><img src="https://img.shields.io/github/v/release/Cekxri/Haaru.UwU?include_prereleases&amp;label=preview&amp;color=81709c&amp;style=flat-square" alt="最新測試版" /></a>
@@ -15,7 +15,7 @@
 
 **繁體中文** · [English](README.en.md)
 
-[**下載模組**](https://github.com/Cekxri/Haaru.UwU/releases) · [安裝](#安裝) · [功能](#功能) · [常見問題](#常見問題) · [問題回報](https://github.com/Cekxri/Haaru.UwU/issues)
+[**下載模組**](https://github.com/Cekxri/Haaru.UwU/releases) · [使用情境](#使用情境) · [安裝](#安裝) · [功能](#功能) · [常見問題](#常見問題) · [問題回報](https://github.com/Cekxri/Haaru.UwU/issues)
 
 <sub>城堡之下的SIM國度.咖啡廳☕</sub>
 
@@ -32,12 +32,20 @@
 
 ---
 
-Haaru 讓你為各張 SIM 選擇 Android 回報的國家與電信商名稱，也能隨時還原。從 **28 個國家、74 個電信商預設值**中選擇，或輸入自訂名稱；國家與名稱可以分開設定。
+**Haaru 的核心目標是達成與 Nrfr 相同的使用效果：讓 TikTok 等服務讀到你設定的 SIM 歸屬地，解除因 SIM 地區檢測造成的使用限制。** 例如插入中國 SIM 後，TikTok 因 SIM 歸屬地被限制而持續提示網路錯誤，Haaru 的目標就是透過回報受支援的 SIM 國家，讓這類服務恢復使用。
+
+你可以為每張 SIM 選擇 Android 回報的國家與電信商名稱，也能隨時還原。從 **28 個國家、74 個電信商預設值**中選擇，或輸入自訂名稱；國家與名稱可以分開設定。
 
 原生 App 使用 Miuix 控件、液態玻璃導航與程序化 3D 雕塑。外觀隨目前配色一起變化，草稿、已儲存方案和引擎確認分開呈現。
 
 > [!NOTE]
 > Haaru 目前為公開測試版。建置與合成環境檢查已完成，KernelSU 真機的完整套用及還原仍待驗證。Android 10 是安裝底線，不代表所有 ROM 都已相容。
+
+## 使用情境
+
+- **TikTok 的 SIM 地區限制** — 針對因中國 SIM 歸屬地檢測而出現的網路錯誤或使用限制，讓 App 讀到設定的受支援國家。
+- **其他依 SIM 地區檢查的服務** — 對齊 Nrfr 的同類用途，例如 Samsung Health 首次 SIM 地區檢查；個別服務的實際結果需要相容性驗證。
+- **SIM 地區識別不符** — 調整系統對外回報的國家或電信商名稱，讓讀取這些資料的 App 使用設定值。
 
 ## 功能
 
@@ -93,7 +101,9 @@ Haaru 讓你為各張 SIM 選擇 Android 回報的國家與電信商名稱，也
 
 電話引擎透過 Zygisk 在系統電話程序中掛鉤，修改回傳資料的副本及兩項非持久 SIM properties，並保存原值供還原。掛鉤覆蓋、SIM 映射、原值與引擎確認不足時，方案不會被視為已生效。
 
-**這調整的是系統回報值。** 不修改實體 SIM、APN、eSIM／Subscription 資料庫或 MCC/MNC，也不改 IP、GPS、帳號或 TikTok 服務端的地區判定。
+**服務讀到的 SIM 國家就是 Haaru 的介入點。** App 如果以 SIM 歸屬地判斷是否允許使用，調整這個回報值便是解除該項限制的技術路徑。實體 SIM、APN、eSIM／Subscription 資料庫及 MCC/MNC 保持原樣。
+
+IP、GPS、帳號或服務端規則可能是同一服務的其他檢查條件，Haaru 不直接修改這些資料。這與解除 SIM 檢測限制是不同層次；實際相容性以服務版本、裝置與驗證結果為準。
 
 設定保存在本機模組資料夾，Haaru 沒有遙測。模組沿用系統的 SELinux 模式；Enforcing 不會被關閉，現有規則只補上電話引擎 socket 所需的限定權限。
 
@@ -121,9 +131,11 @@ APK 是介面。實際電話引擎與受驗證的本機服務由 KernelSU 模組
 </details>
 
 <details>
-<summary><strong>可以保證 TikTok 或其他 App 變成指定地區嗎？</strong></summary>
+<summary><strong>Haaru 如何解除 TikTok 等服務的 SIM 地區限制？</strong></summary>
 
-不能。App 可能使用 IP、GPS、帳號、快取或服務端資料判斷地區。Haaru 的作用範圍是 Android 回報的 SIM 國家與電信商名稱。
+讓 App 讀到你設定的 SIM 國家，取代造成限制的原始歸屬地。這正是 Haaru 對齊 Nrfr 的核心用途；中國 SIM 觸發 TikTok 網路錯誤，是本專案要解決的典型情境。
+
+目標是解除 SIM 檢測造成的限制，個別服務還可能有其他檢查條件。Haaru 目前仍是測試版，完整真機服務效果待驗證；Nrfr 的成功案例不會被當成 Haaru 已驗證的結果。
 
 </details>
 
